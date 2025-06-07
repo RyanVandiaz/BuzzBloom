@@ -3,91 +3,71 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-# import google.generativeai as genai  <- Tidak lagi dibutuhkan untuk simulasi
+from openai import OpenAI
 import json
-import time
+from io import BytesIO
 
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(
     page_title="Media Intelligence Dashboard",
-    page_icon="🧠",
+    page_icon="🟢",
     layout="wide",
 )
 
-# --- FUNGSI BANTUAN (VERSI SIMULASI) ---
+# --- FUNGSI BANTUAN ---
 
-def get_simulated_insights(chart_type):
+# --- Gemini API Call Function ---
+def generate_campaign_summary_llm(prompt):
     """
-    Mensimulasikan panggilan API dengan mengembalikan contoh wawasan yang telah ditulis sebelumnya.
+    Calls the Gemini API to generate a campaign summary based on the provided prompt.
     """
-    time.sleep(1.5) # Mensimulasikan waktu pemrosesan AI
-    insights = {
-        "sentiment": """
-        * **Sentimen Positif Mendominasi:** Ini menandakan penerimaan audiens yang kuat terhadap konten. Pertahankan strategi yang ada.
-        * **Identifikasi Pemicu Negatif:** Meskipun kecil, selidiki konten dengan sentimen negatif untuk menghindari kesalahan serupa di masa depan.
-        * **Manfaatkan Konten Positif:** Bagikan ulang atau promosikan konten dengan sentimen paling positif untuk memaksimalkan jangkauan.
-        """,
-        "trend": """
-        * **Identifikasi Puncak Keterlibatan:** Ada lonjakan signifikan pada pertengahan periode. Analisis konten yang diposting saat itu untuk direplikasi.
-        * **Waspadai Penurunan:** Terjadi penurunan keterlibatan menjelang akhir periode. Pertimbangkan untuk meluncurkan kampanye baru untuk meningkatkan kembali minat.
-        * **Pola Konsisten:** Keterlibatan cenderung lebih tinggi pada akhir pekan. Jadwalkan postingan paling penting Anda pada hari Sabtu atau Minggu.
-        """,
-        "platform": """
-        * **Instagram adalah Bintangnya:** Alokasikan sebagian besar sumber daya ke Instagram karena menghasilkan keterlibatan tertinggi.
-        * **Peluang di YouTube:** Meskipun keterlibatannya lebih rendah, format video di YouTube bisa dieksplorasi lebih lanjut untuk menjangkau audiens baru.
-        * **Evaluasi Ulang Twitter:** Keterlibatan di Twitter paling rendah. Pertimbangkan apakah platform ini masih relevan untuk audiens target Anda.
-        """,
-        "media": """
-        * **Video Mendorong Keterlibatan:** Konten video, meskipun jumlahnya lebih sedikit, tampaknya paling efektif. Prioritaskan produksi video.
-        * **Gambar Tetap Penting:** Gambar adalah format yang paling umum dan stabil. Pastikan kualitas visual tetap tinggi.
-        * **Teks Kurang Efektif:** Konten berbasis teks murni menunjukkan kinerja terendah. Kombinasikan teks dengan elemen visual untuk meningkatkan daya tarik.
-        """,
-        "location": """
-        * **Jakarta sebagai Pusat Audiens:** Jakarta menunjukkan keterlibatan tertinggi. Pertimbangkan kampanye yang ditargetkan secara geografis untuk wilayah ini.
-        * **Potensi di Surabaya & Bandung:** Dua kota ini menunjukkan potensi pertumbuhan. Buat konten yang relevan secara lokal untuk meningkatkan penetrasi.
-        * **Jangkau di Luar Jawa:** Medan dan Makassar menunjukkan minat awal. Eksplorasi kemitraan dengan influencer lokal di sana.
-        """,
-        "influencer": """
-        * **Andalkan Performa Terbaik:** Influencer A dan Brand B adalah pendorong keterlibatan utama. Perkuat kemitraan dengan mereka.
-        * **Evaluasi Kinerja Influencer C:** Kinerjanya jauh di bawah yang lain. Tinjau kembali kesesuaian konten atau pertimbangkan untuk tidak melanjutkan kerja sama.
-        * **Cari Bintang Baru:** Ada potensi pada Influencer D yang mulai menunjukkan pertumbuhan keterlibatan.
-        """,
-        "strategy": """
-        ### Ringkasan Strategi Kampanye (Contoh)
+    # YOUR API KEY IS NOW HARDCODED HERE
+    api_key = "AIzaSyC0VUu6xTFIwH3aP2R7tbhyu4O8m1ICxn4" 
 
-        **1. Ringkasan Kinerja Keseluruhan:**
-        Secara umum, kampanye menunjukkan hasil yang positif dengan dominasi sentimen baik dan tren keterlibatan yang meningkat, meskipun ada sedikit perlambatan di akhir periode.
+    if not api_key: # Added check for empty API key
+        st.error("API Key tidak ditemukan. Pastikan API Key diatur dengan benar di lingkungan Canvas.")
+        return "Gagal membuat ringkasan: API Key tidak diatur."
 
-        **2. Fokus Platform:**
-        * **Prioritas Utama (70%): Instagram.** Platform ini adalah pendorong keterlibatan terbesar. Fokus pada Reels dan Stories interaktif.
-        * **Prioritas Kedua (20%): YouTube.** Gunakan untuk konten mendalam seperti tutorial atau di balik layar untuk membangun loyalitas.
-        * **Pemeliharaan (10%): News Portal & Twitter.** Gunakan untuk pengumuman singkat dan distribusi siaran pers.
+    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
 
-        **3. Rekomendasi Konten & Kreatif:**
-        * **Prioritaskan Video:** Buat lebih banyak konten video pendek (di bawah 60 detik) untuk Instagram Reels dan YouTube Shorts.
-        * **Konten Buatan Pengguna (UGC):** Adakan kontes atau kampanye yang mendorong audiens untuk membuat konten terkait brand Anda.
-        * **Tema:** Fokus pada kisah sukses pelanggan dan konten edukasi yang relevan dengan produk.
+    chat_history = [{"role": "user", "parts": [{"text": prompt}]}]
+    payload = {"contents": chat_history}
 
-        **4. Penargetan Audiens:**
-        * **Utama:** Lanjutkan penargetan agresif di **Jakarta**.
-        * **Sekunder:** Alokasikan sebagian anggaran untuk iklan bertarget di **Surabaya** dan **Bandung**.
-        * **Influencer:** Perpanjang kontrak dengan **Influencer A** dan alokasikan dana untuk bereksperimen dengan 2-3 mikro-influencer baru.
+    try:
+        response = requests.post(api_url, headers={'Content-Type': 'application/json'}, json=payload)
+        response.raise_for_status() # Raise an exception for HTTP errors (4xx or 5xx)
+        result = response.json()
 
-        **5. Peluang Peningkatan:**
-        * **Optimalkan Waktu Posting:** Jadwalkan postingan penting pada akhir pekan (Sabtu sore & Minggu pagi) untuk hasil maksimal.
-        * **Tingkatkan Kualitas Visual:** Investasikan pada sesi foto/video profesional untuk meningkatkan daya saing visual konten gambar.
-        """
-    }
-    return insights.get(chart_type, "Contoh wawasan tidak ditemukan untuk jenis grafik ini.")
+        if result.get('candidates') and len(result['candidates']) > 0 and \
+           result['candidates'][0].get('content') and result['candidates'][0]['content'].get('parts') and \
+           len(result['candidates'][0]['content']['parts']) > 0:
+            return result['candidates'][0]['content']['parts'][0]['text']
+        else:
+            st.error("Gemini API response structure unexpected.")
+            return "Gagal membuat ringkasan. Silakan coba lagi."
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error calling Gemini API: {e}. Please ensure you have internet connectivity and a valid API key.")
+        return "Error membuat ringkasan: Terjadi masalah koneksi atau API."
+    except Exception as e:
+        st.error(f"An unexpected error occurred during summary generation: {e}")
+        return "Error membuat ringkasan: Terjadi kesalahan tak terduga."
+            messages=[
+                {"role": "system", "content": "You are an expert media analyst. Provide three brief, actionable insights based on the data provided. Use bullet points."},
+                {"role": "user", "content": prompt_text},
+            ],
+            temperature=0.7,
+        )
+        return completion.choices[0].message.content
+    except Exception as e:
+        return f"Terjadi kesalahan saat menghubungi API AI: {e}"
 
 
-# --- INISIALISASI SESSION STATE ---
-if 'data_loaded' not in st.session_state:
-    st.session_state.data_loaded = False
-if 'analysis_triggered' not in st.session_state:
-    st.session_state.analysis_triggered = False
-if 'df' not in st.session_state:
-    st.session_state.df = None
+# --- GAYA KUSTOM (CSS) ---
+def local_css(file_name):
+    with open(file_name) as f:
+        st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+
+# local_css("style.css") # Anda dapat membuat file style.css untuk gaya yang lebih kompleks jika diperlukan
 
 # --- HEADER & UI UTAMA ---
 st.markdown("""
@@ -96,180 +76,255 @@ st.markdown("""
         <p>Dashboard Analisis Kinerja Konten Interaktif</p>
     </div>
 """, unsafe_allow_html=True)
+
 st.markdown("---")
 
 # --- BILAH SISI (SIDEBAR) ---
-st.sidebar.header("Tentang Aplikasi")
-st.sidebar.info(
-    "Ini adalah dashboard interaktif untuk menganalisis data kinerja media. "
-    "Wawasan AI yang ditampilkan adalah contoh yang telah diprogram sebelumnya untuk tujuan demonstrasi."
-)
+st.sidebar.header("Filter & Pengaturan")
 
 
-# --- KONTROL TAMPILAN UTAMA ---
+# Fitur Unggah File
+st.sidebar.subheader("Unggah Data Anda")
+uploaded_file = st.sidebar.file_uploader("Pilih file CSV", type=["csv"])
 
-# Langkah 1: Unggah Data (di menu utama)
-st.subheader("Langkah 1: Unggah File Data Anda")
-uploaded_file = st.file_uploader("Pilih file CSV", type=["csv"], label_visibility="collapsed")
+# DataFrame Inisialisasi
+df = None
 
 if uploaded_file is not None:
-    # Proses hanya jika file baru diunggah atau belum diproses
-    if st.session_state.df is None or uploaded_file.name != st.session_state.get('file_name', ''):
-        try:
-            with st.spinner('Memproses file... Membersihkan data...'):
-                df = pd.read_csv(uploaded_file)
-                if 'Date' in df.columns:
-                    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-                if 'Engagements' in df.columns:
-                    df['Engagements'] = df['Engagements'].fillna(0).astype(int)
-                df.dropna(subset=['Date'], inplace=True)
-                
-                st.session_state.df = df
-                st.session_state.data_loaded = True
-                st.session_state.analysis_triggered = False # Reset analisis saat file baru diunggah
-                st.session_state.file_name = uploaded_file.name
-            st.success(f"File '{uploaded_file.name}' berhasil dimuat dan siap dianalisis.")
-        except Exception as e:
-            st.error(f"Gagal memproses file: {e}")
-            st.session_state.data_loaded = False
+    try:
+        # Tampilkan status kepada pengguna
+        with st.spinner('Memproses file... Membersihkan data...'):
+            df = pd.read_csv(uploaded_file)
+            
+            # 1. Pembersihan Data Otomatis
+            # Konversi kolom 'Date' ke datetime
+            if 'Date' in df.columns:
+                df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+            
+            # Isi nilai kosong pada 'Engagements' dengan 0
+            if 'Engagements' in df.columns:
+                df['Engagements'] = df['Engagements'].fillna(0).astype(int)
 
-# Tampilkan pesan sambutan jika belum ada data
-if not st.session_state.data_loaded:
-    st.info("Selamat Datang! Silakan mulai dengan mengunggah file CSV di atas.")
+            # Hapus baris di mana tanggal tidak dapat di-parse
+            df.dropna(subset=['Date'], inplace=True)
+            
+        st.sidebar.success(f"File '{uploaded_file.name}' berhasil diproses!")
+        st.sidebar.info(f"Dataset berisi {df.shape[0]} baris dan {df.shape[1]} kolom.")
+        
+    except Exception as e:
+        st.sidebar.error(f"Terjadi kesalahan saat memproses file: {e}")
+        df = None # Pastikan df adalah None jika ada kesalahan
 else:
-    # Langkah 2: Tombol Analisis
-    st.subheader("Langkah 2: Mulai Analisis")
-    if st.button("🚀 Analyze Data", use_container_width=True, type="primary"):
-        st.session_state.analysis_triggered = True
+    st.info("Silakan unggah file CSV melalui bilah sisi untuk memulai analisis.")
 
-    # Jika analisis dipicu, tampilkan dashboard lengkap
-    if st.session_state.analysis_triggered:
-        df = st.session_state.df
+# --- Filter Interaktif (hanya ditampilkan jika df dimuat) ---
+if df is not None:
+    st.sidebar.markdown("---")
+    st.sidebar.header("Filter Data")
+
+    # Filter Rentang Tanggal
+    min_date = df['Date'].min().date()
+    max_date = df['Date'].max().date()
+    date_range = st.sidebar.date_input(
+        "Pilih Rentang Tanggal",
+        value=(min_date, max_date),
+        min_value=min_date,
+        max_value=max_date
+    )
+    start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
+
+    # Filter Multi-pilih
+    selected_platforms = st.sidebar.multiselect("Platform", options=df['Platform'].unique(), default=df['Platform'].unique())
+    selected_sentiments = st.sidebar.multiselect("Sentimen", options=df['Sentiment'].unique(), default=df['Sentiment'].unique())
+    selected_media_types = st.sidebar.multiselect("Jenis Media", options=df['Media_Type'].unique(), default=df['Media_Type'].unique())
+    
+    # Terapkan filter ke DataFrame
+    df_filtered = df[
+        (df['Date'] >= start_date) & (df['Date'] <= end_date) &
+        (df['Platform'].isin(selected_platforms)) &
+        (df['Sentiment'].isin(selected_sentiments)) &
+        (df['Media_Type'].isin(selected_media_types))
+    ]
+
+    # --- TAMPILAN DASHBOARD ---
+    if not df_filtered.empty:
+        # Metrik Utama
+        total_engagement = df_filtered['Engagements'].sum()
+        total_posts = len(df_filtered)
+        avg_engagement_per_post = total_engagement / total_posts if total_posts > 0 else 0
+
+        st.markdown("### Ringkasan Kinerja")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Keterlibatan", f"{total_engagement:,.0f}")
+        col2.metric("Total Postingan", f"{total_posts:,.0f}")
+        col3.metric("Keterlibatan Rata-rata/Postingan", f"{avg_engagement_per_post:,.2f}")
+
+        st.markdown("<hr style='border:1px solid #39FF14'>", unsafe_allow_html=True)
+
+        # --- VISUALISASI DAN WAWASAN AI ---
+        col_chart1, col_chart2 = st.columns(2)
+
+        with col_chart1:
+            # 1. Rincian Sentimen (Pie Chart)
+            st.subheader("Distribusi Sentimen")
+            sentiment_counts = df_filtered['Sentiment'].value_counts().reset_index()
+            sentiment_counts.columns = ['Sentiment', 'Jumlah']
+            fig_sentiment = px.pie(sentiment_counts, names='Sentiment', values='Jumlah',
+                                   color='Sentiment',
+                                   color_discrete_map={'Positive': '#39FF14', 'Neutral': 'grey', 'Negative': '#FF6347'},
+                                   hole=.3)
+            fig_sentiment.update_layout(template="plotly_dark", legend_title_text='Sentimen')
+            st.plotly_chart(fig_sentiment, use_container_width=True)
+
+            with st.expander("🤖 Wawasan AI tentang Sentimen"):
+                prompt = f"""
+                Analisis data distribusi sentimen berikut dan berikan tiga wawasan yang dapat ditindaklanjuti.
+                Data: {sentiment_counts.to_json(orient='split')}
+                Contoh: 'Sentimen Positif mendominasi, menunjukkan penerimaan audiens yang baik. Pertahankan strategi konten saat ini.'
+                """
+                if openai_api_key:
+                    with st.spinner("Menganalisis sentimen..."):
+                        st.write(get_ai_insights(prompt, openai_api_key))
+                else:
+                    st.warning("Masukkan kunci API untuk mendapatkan wawasan.")
+
+
+        with col_chart2:
+            # 2. Tren Keterlibatan dari Waktu ke Waktu (Line Chart)
+            st.subheader("Tren Keterlibatan dari Waktu ke Waktu")
+            engagement_trend = df_filtered.groupby(df_filtered['Date'].dt.to_period('D'))['Engagements'].sum().reset_index()
+            engagement_trend['Date'] = engagement_trend['Date'].dt.to_timestamp()
+            fig_trend = px.line(engagement_trend, x='Date', y='Engagements',
+                                markers=True, labels={'Engagements': 'Total Keterlibatan'})
+            fig_trend.update_traces(line=dict(color='#39FF14'))
+            fig_trend.update_layout(template="plotly_dark", xaxis_title='Tanggal', yaxis_title='Total Keterlibatan')
+            st.plotly_chart(fig_trend, use_container_width=True)
+
+            with st.expander("🤖 Wawasan AI tentang Tren Keterlibatan"):
+                prompt = f"""
+                Analisis data tren keterlibatan dari waktu ke waktu berikut. Identifikasi puncak, penurunan, dan tren umum. Berikan tiga wawasan.
+                Data: {engagement_trend.to_json(orient='split')}
+                Contoh: 'Terlihat lonjakan keterlibatan yang signifikan pada tanggal X. Selidiki konten yang diposting pada hari itu untuk direplikasi.'
+                """
+                if openai_api_key:
+                    with st.spinner("Menganalisis tren..."):
+                        st.write(get_ai_insights(prompt, openai_api_key))
+                else:
+                    st.warning("Masukkan kunci API untuk mendapatkan wawasan.")
         
-        # Filter Interaktif (di menu utama dalam sebuah expander)
-        with st.expander("⚙️ Tampilkan/Sembunyikan Filter", expanded=True):
-            filter_col1, filter_col2, filter_col3 = st.columns([2, 1, 1])
-            
-            with filter_col1:
-                min_date = df['Date'].min().date()
-                max_date = df['Date'].max().date()
-                date_range = st.date_input("Pilih Rentang Tanggal", value=(min_date, max_date), min_value=min_date, max_value=max_date)
-                start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
-            
-            with filter_col2:
-                selected_platforms = st.multiselect("Platform", options=df['Platform'].unique(), default=df['Platform'].unique())
-                selected_sentiments = st.multiselect("Sentimen", options=df['Sentiment'].unique(), default=df['Sentiment'].unique())
-
-            with filter_col3:
-                selected_media_types = st.multiselect("Jenis Media", options=df['Media_Type'].unique(), default=df['Media_Type'].unique())
+        st.markdown("<hr style='border:1px solid #39FF14'>", unsafe_allow_html=True)
         
-        # Terapkan filter ke DataFrame
-        df_filtered = df[
-            (df['Date'] >= start_date) & (df['Date'] <= end_date) &
-            (df['Platform'].isin(selected_platforms)) &
-            (df['Sentiment'].isin(selected_sentiments)) &
-            (df['Media_Type'].isin(selected_media_types))
-        ]
+        col_chart3, col_chart4, col_chart5 = st.columns(3)
 
-        st.markdown("---")
+        with col_chart3:
+             # 3. Keterlibatan Platform (Bar Chart)
+            st.subheader("Keterlibatan per Platform")
+            platform_engagement = df_filtered.groupby('Platform')['Engagements'].sum().sort_values(ascending=False).reset_index()
+            fig_platform = px.bar(platform_engagement, x='Platform', y='Engagements',
+                                  color='Platform',
+                                  color_discrete_sequence=px.colors.qualitative.Pastel)
+            fig_platform.update_layout(template="plotly_dark", showlegend=False)
+            st.plotly_chart(fig_platform, use_container_width=True)
 
-        if df_filtered.empty:
-            st.warning("Tidak ada data yang cocok dengan filter yang Anda pilih. Coba perluas kriteria filter Anda.")
-        else:
-            # --- TAMPILAN DASHBOARD ---
-            st.header("Hasil Analisis")
-            total_engagement = df_filtered['Engagements'].sum()
-            total_posts = len(df_filtered)
-            avg_engagement_per_post = total_engagement / total_posts if total_posts > 0 else 0
+            with st.expander("🤖 Wawasan AI tentang Platform"):
+                prompt = f"""
+                Analisis data keterlibatan platform ini. Tunjukkan platform berkinerja terbaik dan terendah. Berikan tiga rekomendasi.
+                Data: {platform_engagement.to_json(orient='split')}
+                Contoh: 'Instagram adalah pendorong keterlibatan terbesar. Alokasikan lebih banyak sumber daya untuk konten Instagram.'
+                """
+                if openai_api_key:
+                    with st.spinner("Menganalisis platform..."):
+                        st.write(get_ai_insights(prompt, openai_api_key))
+                else:
+                    st.warning("Masukkan kunci API untuk mendapatkan wawasan.")
 
-            st.markdown("##### Ringkasan Kinerja")
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Total Keterlibatan", f"{total_engagement:,.0f}")
-            c2.metric("Total Postingan", f"{total_posts:,.0f}")
-            c3.metric("Keterlibatan Rata-rata/Postingan", f"{avg_engagement_per_post:,.2f}")
-            st.markdown("<br>", unsafe_allow_html=True)
+        with col_chart4:
+            # 4. Perpaduan Jenis Media (Pie Chart)
+            st.subheader("Distribusi Jenis Media")
+            media_type_counts = df_filtered['Media_Type'].value_counts().reset_index()
+            media_type_counts.columns = ['Media_Type', 'Jumlah']
+            fig_media = px.pie(media_type_counts, names='Media_Type', values='Jumlah',
+                               color_discrete_sequence=px.colors.sequential.Aggrnyl,
+                               hole=.3)
+            fig_media.update_layout(template="plotly_dark", legend_title_text='Jenis Media')
+            st.plotly_chart(fig_media, use_container_width=True)
 
-            # --- VISUALISASI DAN WAWASAN AI ---
-            col_chart1, col_chart2 = st.columns(2)
+            with st.expander("🤖 Wawasan AI tentang Jenis Media"):
+                prompt = f"""
+                Analisis data distribusi jenis media ini. Jenis media mana yang paling sering digunakan? Kaitkan dengan keterlibatan jika memungkinkan. Berikan tiga wawasan.
+                Data: {media_type_counts.to_json(orient='split')}
+                """
+                if openai_api_key:
+                    with st.spinner("Menganalisis jenis media..."):
+                        st.write(get_ai_insights(prompt, openai_api_key))
+                else:
+                    st.warning("Masukkan kunci API untuk mendapatkan wawasan.")
 
-            with col_chart1:
-                st.subheader("Distribusi Sentimen")
-                sentiment_counts = df_filtered['Sentiment'].value_counts().reset_index()
-                fig_sentiment = px.pie(sentiment_counts, names='Sentiment', values='count', hole=.3,
-                                       color='Sentiment', color_discrete_map={'Positive': '#39FF14', 'Neutral': 'grey', 'Negative': '#FF6347'})
-                fig_sentiment.update_layout(template="plotly_dark", legend_title_text='Sentimen')
-                st.plotly_chart(fig_sentiment, use_container_width=True)
+        with col_chart5:
+            # 5. 5 Lokasi Teratas berdasarkan Keterlibatan (Bar Chart)
+            st.subheader("5 Lokasi Teratas")
+            top_locations = df_filtered.groupby('Location')['Engagements'].sum().nlargest(5).sort_values(ascending=True).reset_index()
+            fig_location = px.bar(top_locations, y='Location', x='Engagements', orientation='h',
+                                  color='Engagements', color_continuous_scale='Greens')
+            fig_location.update_layout(template="plotly_dark", yaxis_title='Lokasi')
+            st.plotly_chart(fig_location, use_container_width=True)
 
-                with st.expander("🤖 AI Insights (Demonstrasi)"):
-                    with st.spinner("Menghasilkan wawasan..."):
-                        st.markdown(get_simulated_insights("sentiment"))
+            with st.expander("🤖 Wawasan AI tentang Lokasi"):
+                prompt = f"""
+                Analisis data 5 lokasi teratas berdasarkan keterlibatan. Lokasi mana yang paling terlibat? Berikan tiga strategi penargetan geografis.
+                Data: {top_locations.to_json(orient='split')}
+                Contoh: 'Jakarta menunjukkan keterlibatan tertinggi. Pertimbangkan untuk menjalankan kampanye yang dilokalkan untuk audiens Jakarta.'
+                """
+                if openai_api_key:
+                    with st.spinner("Menganalisis lokasi..."):
+                        st.write(get_ai_insights(prompt, openai_api_key))
+                else:
+                    st.warning("Masukkan kunci API untuk mendapatkan wawasan.")
 
-            with col_chart2:
-                st.subheader("Tren Keterlibatan dari Waktu ke Waktu")
-                engagement_trend = df_filtered.groupby(df_filtered['Date'].dt.to_period('D'))['Engagements'].sum().reset_index()
-                engagement_trend['Date'] = engagement_trend['Date'].dt.to_timestamp()
-                fig_trend = px.line(engagement_trend, x='Date', y='Engagements', markers=True)
-                fig_trend.update_traces(line=dict(color='#39FF14'))
-                fig_trend.update_layout(template="plotly_dark", xaxis_title='Tanggal', yaxis_title='Total Keterlibatan')
-                st.plotly_chart(fig_trend, use_container_width=True)
+        st.markdown("<hr style='border:1px solid #39FF14'>", unsafe_allow_html=True)
+        
+        # --- FITUR LANJUTAN ---
+        st.header("🧠 Analisis & Rekomendasi Lanjutan")
+        
+        if st.button("Hasilkan Ringkasan Strategi Kampanye", key="generate_summary"):
+            if openai_api_key:
+                with st.spinner("AI sedang menyusun ringkasan strategi... Ini mungkin memakan waktu sebentar."):
+                    # Buat ringkasan data yang lebih kecil untuk dikirim sebagai prompt
+                    summary_data = df_filtered.sample(min(100, len(df_filtered))).to_dict(orient='records')
+                    
+                    strategy_prompt = f"""
+                    Anda adalah seorang ahli strategi media digital. Berdasarkan ringkasan data berikut dari kampanye media, buatlah ringkasan strategi yang komprehensif.
+                    Fokus pada:
+                    1.  **Ringkasan Kinerja Keseluruhan:** Apa sentimen dan tren keterlibatan umum?
+                    2.  **Platform Unggulan:** Platform mana yang harus menjadi fokus utama dan mengapa?
+                    3.  **Rekomendasi Konten:** Jenis media dan topik konten apa yang paling beresonansi dengan audiens?
+                    4.  **Penargetan Audiens:** Lokasi mana yang harus diprioritaskan?
+                    5.  **Peluang Peningkatan:** Area apa yang menunjukkan kinerja buruk dan bagaimana cara memperbaikinya?
+                    
+                    Data:
+                    {json.dumps(summary_data, indent=2)}
+                    
+                    Berikan output dalam format markdown yang terstruktur dengan baik.
+                    """
+                    
+                    strategy_summary = get_ai_insights(strategy_prompt, openai_api_key)
+                    st.markdown(strategy_summary)
+            else:
+                st.error("Harap masukkan Kunci API OpenAI Anda di bilah sisi untuk menggunakan fitur ini.")
 
-                with st.expander("🤖 AI Insights (Demonstrasi)"):
-                     with st.spinner("Menghasilkan wawasan..."):
-                        st.markdown(get_simulated_insights("trend"))
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            col_chart3, col_chart4 = st.columns(2)
-
-            with col_chart3:
-                st.subheader("Keterlibatan per Platform")
-                platform_engagement = df_filtered.groupby('Platform')['Engagements'].sum().sort_values(ascending=False).reset_index()
-                fig_platform = px.bar(platform_engagement, x='Platform', y='Engagements', color='Platform', color_discrete_sequence=px.colors.qualitative.Pastel)
-                fig_platform.update_layout(template="plotly_dark", showlegend=False)
-                st.plotly_chart(fig_platform, use_container_width=True)
-
-                with st.expander("🤖 AI Insights (Demonstrasi)"):
-                    with st.spinner("Menghasilkan wawasan..."):
-                        st.markdown(get_simulated_insights("platform"))
-
-            with col_chart4:
-                st.subheader("Distribusi Jenis Media")
-                media_type_counts = df_filtered['Media_Type'].value_counts().reset_index()
-                fig_media = px.pie(media_type_counts, names='Media_Type', values='count', hole=.3, color_discrete_sequence=px.colors.sequential.Aggrnyl)
-                fig_media.update_layout(template="plotly_dark", legend_title_text='Jenis Media')
-                st.plotly_chart(fig_media, use_container_width=True)
-
-                with st.expander("🤖 AI Insights (Demonstrasi)"):
-                    with st.spinner("Menghasilkan wawasan..."):
-                        st.markdown(get_simulated_insights("media"))
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            col_chart5, col_chart6 = st.columns(2)
-            
-            with col_chart5:
-                st.subheader("5 Lokasi Teratas")
-                top_locations = df_filtered.groupby('Location')['Engagements'].sum().nlargest(5).sort_values(ascending=True).reset_index()
-                fig_location = px.bar(top_locations, y='Location', x='Engagements', orientation='h', color='Engagements', color_continuous_scale='Greens')
-                fig_location.update_layout(template="plotly_dark", yaxis_title='Lokasi')
-                st.plotly_chart(fig_location, use_container_width=True)
-
-                with st.expander("🤖 AI Insights (Demonstrasi)"):
-                    with st.spinner("Menghasilkan wawasan..."):
-                        st.markdown(get_simulated_insights("location"))
-            
-            with col_chart6:
-                st.subheader("5 Influencer/Brand Teratas")
-                top_influencers = df_filtered.groupby('Influencer_Brand')['Engagements'].sum().nlargest(5).sort_values(ascending=True).reset_index()
-                fig_influencer = px.bar(top_influencers, y='Influencer_Brand', x='Engagements', orientation='h', color='Engagements', color_continuous_scale='Purples')
-                fig_influencer.update_layout(template="plotly_dark", yaxis_title='Influencer / Brand')
-                st.plotly_chart(fig_influencer, use_container_width=True)
-
-                with st.expander("🤖 AI Insights (Demonstrasi)"):
-                    with st.spinner("Menghasilkan wawasan..."):
-                        st.markdown(get_simulated_insights("influencer"))
-
-            # --- FITUR STRATEGI LANJUTAN ---
-            st.markdown("---")
-            st.header("🧠 Analisis & Rekomendasi Strategi")
-            if st.button("Hasilkan Ringkasan Strategi Kampanye", key="generate_summary"):
-                with st.spinner("AI sedang menyusun ringkasan strategi..."):
-                    st.markdown(get_simulated_insights("strategy"))
+    else:
+        st.warning("Tidak ada data yang tersedia untuk filter yang dipilih. Coba sesuaikan filter Anda.")
+else:
+    st.markdown("""
+    ### Selamat Datang di Dashboard Intelijen Media Anda!
+    
+    Dashboard ini memungkinkan Anda untuk:
+    - **Menganalisis** kinerja konten di berbagai platform.
+    - **Memvisualisasikan** tren keterlibatan, distribusi sentimen, dan banyak lagi.
+    - **Mendapatkan wawasan** yang dihasilkan AI untuk mendorong strategi Anda.
+    
+    **Untuk memulai:**
+    1.  Gunakan bilah sisi di sebelah kiri untuk **mengunggah file CSV Anda**.
+    2.  (Opsional) Masukkan **Kunci API OpenRouter/OpenAI** Anda untuk mengaktifkan fitur analisis AI.
+    3.  Gunakan **filter interaktif** untuk menelusuri data Anda.
+    """)
