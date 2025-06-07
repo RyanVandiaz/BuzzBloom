@@ -3,8 +3,9 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import google.generativeai as genai
+# import google.generativeai as genai  <- Tidak lagi dibutuhkan untuk simulasi
 import json
+import time
 
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(
@@ -13,29 +14,72 @@ st.set_page_config(
     layout="wide",
 )
 
-# --- FUNGSI BANTUAN ---
+# --- FUNGSI BANTUAN (VERSI SIMULASI) ---
 
-def get_gemini_insights(prompt_text, api_key):
+def get_simulated_insights(chart_type):
     """
-    Mengirimkan prompt ke Google Gemini API dan mengembalikan responsnya.
+    Mensimulasikan panggilan API dengan mengembalikan contoh wawasan yang telah ditulis sebelumnya.
     """
-    if not api_key:
-        return "Kunci API Gemini tidak diberikan. Masukkan kunci API Anda di bilah sisi untuk mengaktifkan wawasan AI."
-    try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
-        
-        full_prompt = (
-            "You are an expert media analyst. Your task is to provide three brief, actionable, and insightful bullet points "
-            "based on the data summary provided. Focus on strategic recommendations.\n\n"
-            "Data Summary:\n"
-            f"{prompt_text}"
-        )
+    time.sleep(1.5) # Mensimulasikan waktu pemrosesan AI
+    insights = {
+        "sentiment": """
+        * **Sentimen Positif Mendominasi:** Ini menandakan penerimaan audiens yang kuat terhadap konten. Pertahankan strategi yang ada.
+        * **Identifikasi Pemicu Negatif:** Meskipun kecil, selidiki konten dengan sentimen negatif untuk menghindari kesalahan serupa di masa depan.
+        * **Manfaatkan Konten Positif:** Bagikan ulang atau promosikan konten dengan sentimen paling positif untuk memaksimalkan jangkauan.
+        """,
+        "trend": """
+        * **Identifikasi Puncak Keterlibatan:** Ada lonjakan signifikan pada pertengahan periode. Analisis konten yang diposting saat itu untuk direplikasi.
+        * **Waspadai Penurunan:** Terjadi penurunan keterlibatan menjelang akhir periode. Pertimbangkan untuk meluncurkan kampanye baru untuk meningkatkan kembali minat.
+        * **Pola Konsisten:** Keterlibatan cenderung lebih tinggi pada akhir pekan. Jadwalkan postingan paling penting Anda pada hari Sabtu atau Minggu.
+        """,
+        "platform": """
+        * **Instagram adalah Bintangnya:** Alokasikan sebagian besar sumber daya ke Instagram karena menghasilkan keterlibatan tertinggi.
+        * **Peluang di YouTube:** Meskipun keterlibatannya lebih rendah, format video di YouTube bisa dieksplorasi lebih lanjut untuk menjangkau audiens baru.
+        * **Evaluasi Ulang Twitter:** Keterlibatan di Twitter paling rendah. Pertimbangkan apakah platform ini masih relevan untuk audiens target Anda.
+        """,
+        "media": """
+        * **Video Mendorong Keterlibatan:** Konten video, meskipun jumlahnya lebih sedikit, tampaknya paling efektif. Prioritaskan produksi video.
+        * **Gambar Tetap Penting:** Gambar adalah format yang paling umum dan stabil. Pastikan kualitas visual tetap tinggi.
+        * **Teks Kurang Efektif:** Konten berbasis teks murni menunjukkan kinerja terendah. Kombinasikan teks dengan elemen visual untuk meningkatkan daya tarik.
+        """,
+        "location": """
+        * **Jakarta sebagai Pusat Audiens:** Jakarta menunjukkan keterlibatan tertinggi. Pertimbangkan kampanye yang ditargetkan secara geografis untuk wilayah ini.
+        * **Potensi di Surabaya & Bandung:** Dua kota ini menunjukkan potensi pertumbuhan. Buat konten yang relevan secara lokal untuk meningkatkan penetrasi.
+        * **Jangkau di Luar Jawa:** Medan dan Makassar menunjukkan minat awal. Eksplorasi kemitraan dengan influencer lokal di sana.
+        """,
+        "influencer": """
+        * **Andalkan Performa Terbaik:** Influencer A dan Brand B adalah pendorong keterlibatan utama. Perkuat kemitraan dengan mereka.
+        * **Evaluasi Kinerja Influencer C:** Kinerjanya jauh di bawah yang lain. Tinjau kembali kesesuaian konten atau pertimbangkan untuk tidak melanjutkan kerja sama.
+        * **Cari Bintang Baru:** Ada potensi pada Influencer D yang mulai menunjukkan pertumbuhan keterlibatan.
+        """,
+        "strategy": """
+        ### Ringkasan Strategi Kampanye (Contoh)
 
-        response = model.generate_content(full_prompt)
-        return response.text
-    except Exception as e:
-        return f"Terjadi kesalahan saat menghubungi Gemini API: {e}"
+        **1. Ringkasan Kinerja Keseluruhan:**
+        Secara umum, kampanye menunjukkan hasil yang positif dengan dominasi sentimen baik dan tren keterlibatan yang meningkat, meskipun ada sedikit perlambatan di akhir periode.
+
+        **2. Fokus Platform:**
+        * **Prioritas Utama (70%): Instagram.** Platform ini adalah pendorong keterlibatan terbesar. Fokus pada Reels dan Stories interaktif.
+        * **Prioritas Kedua (20%): YouTube.** Gunakan untuk konten mendalam seperti tutorial atau di balik layar untuk membangun loyalitas.
+        * **Pemeliharaan (10%): News Portal & Twitter.** Gunakan untuk pengumuman singkat dan distribusi siaran pers.
+
+        **3. Rekomendasi Konten & Kreatif:**
+        * **Prioritaskan Video:** Buat lebih banyak konten video pendek (di bawah 60 detik) untuk Instagram Reels dan YouTube Shorts.
+        * **Konten Buatan Pengguna (UGC):** Adakan kontes atau kampanye yang mendorong audiens untuk membuat konten terkait brand Anda.
+        * **Tema:** Fokus pada kisah sukses pelanggan dan konten edukasi yang relevan dengan produk.
+
+        **4. Penargetan Audiens:**
+        * **Utama:** Lanjutkan penargetan agresif di **Jakarta**.
+        * **Sekunder:** Alokasikan sebagian anggaran untuk iklan bertarget di **Surabaya** dan **Bandung**.
+        * **Influencer:** Perpanjang kontrak dengan **Influencer A** dan alokasikan dana untuk bereksperimen dengan 2-3 mikro-influencer baru.
+
+        **5. Peluang Peningkatan:**
+        * **Optimalkan Waktu Posting:** Jadwalkan postingan penting pada akhir pekan (Sabtu sore & Minggu pagi) untuk hasil maksimal.
+        * **Tingkatkan Kualitas Visual:** Investasikan pada sesi foto/video profesional untuk meningkatkan daya saing visual konten gambar.
+        """
+    }
+    return insights.get(chart_type, "Contoh wawasan tidak ditemukan untuk jenis grafik ini.")
+
 
 # --- INISIALISASI SESSION STATE ---
 if 'data_loaded' not in st.session_state:
@@ -55,9 +99,12 @@ st.markdown("""
 st.markdown("---")
 
 # --- BILAH SISI (SIDEBAR) ---
-st.sidebar.header("Pengaturan")
-st.sidebar.subheader("Pengaturan AI")
-gemini_api_key = st.sidebar.text_input("Masukkan Kunci API Google Gemini Anda", type="password", help="Diperlukan untuk menghasilkan wawasan otomatis.")
+st.sidebar.header("Tentang Aplikasi")
+st.sidebar.info(
+    "Ini adalah dashboard interaktif untuk menganalisis data kinerja media. "
+    "Wawasan AI yang ditampilkan adalah contoh yang telah diprogram sebelumnya untuk tujuan demonstrasi."
+)
+
 
 # --- KONTROL TAMPILAN UTAMA ---
 
@@ -153,10 +200,9 @@ else:
                 fig_sentiment.update_layout(template="plotly_dark", legend_title_text='Sentimen')
                 st.plotly_chart(fig_sentiment, use_container_width=True)
 
-                with st.expander("🤖 AI Insights (Gemini API)"):
-                    with st.spinner("Menganalisis sentimen..."):
-                        prompt = f"Chart: Sentiment Distribution.\nData: {sentiment_counts.to_json(orient='split')}"
-                        st.markdown(get_gemini_insights(prompt, gemini_api_key))
+                with st.expander("🤖 AI Insights (Demonstrasi)"):
+                    with st.spinner("Menghasilkan wawasan..."):
+                        st.markdown(get_simulated_insights("sentiment"))
 
             with col_chart2:
                 st.subheader("Tren Keterlibatan dari Waktu ke Waktu")
@@ -167,10 +213,9 @@ else:
                 fig_trend.update_layout(template="plotly_dark", xaxis_title='Tanggal', yaxis_title='Total Keterlibatan')
                 st.plotly_chart(fig_trend, use_container_width=True)
 
-                with st.expander("🤖 AI Insights (Gemini API)"):
-                     with st.spinner("Menganalisis tren..."):
-                        prompt = f"Chart: Engagement Trend Over Time.\nData: {engagement_trend.to_json(orient='split')}"
-                        st.markdown(get_gemini_insights(prompt, gemini_api_key))
+                with st.expander("🤖 AI Insights (Demonstrasi)"):
+                     with st.spinner("Menghasilkan wawasan..."):
+                        st.markdown(get_simulated_insights("trend"))
             
             st.markdown("<br>", unsafe_allow_html=True)
             col_chart3, col_chart4 = st.columns(2)
@@ -182,10 +227,9 @@ else:
                 fig_platform.update_layout(template="plotly_dark", showlegend=False)
                 st.plotly_chart(fig_platform, use_container_width=True)
 
-                with st.expander("🤖 AI Insights (Gemini API)"):
-                    with st.spinner("Menganalisis platform..."):
-                        prompt = f"Chart: Platform Engagements.\nData: {platform_engagement.to_json(orient='split')}"
-                        st.markdown(get_gemini_insights(prompt, gemini_api_key))
+                with st.expander("🤖 AI Insights (Demonstrasi)"):
+                    with st.spinner("Menghasilkan wawasan..."):
+                        st.markdown(get_simulated_insights("platform"))
 
             with col_chart4:
                 st.subheader("Distribusi Jenis Media")
@@ -194,10 +238,9 @@ else:
                 fig_media.update_layout(template="plotly_dark", legend_title_text='Jenis Media')
                 st.plotly_chart(fig_media, use_container_width=True)
 
-                with st.expander("🤖 AI Insights (Gemini API)"):
-                    with st.spinner("Menganalisis jenis media..."):
-                        prompt = f"Chart: Media Type Mix.\nData: {media_type_counts.to_json(orient='split')}"
-                        st.markdown(get_gemini_insights(prompt, gemini_api_key))
+                with st.expander("🤖 AI Insights (Demonstrasi)"):
+                    with st.spinner("Menghasilkan wawasan..."):
+                        st.markdown(get_simulated_insights("media"))
 
             st.markdown("<br>", unsafe_allow_html=True)
             col_chart5, col_chart6 = st.columns(2)
@@ -209,10 +252,9 @@ else:
                 fig_location.update_layout(template="plotly_dark", yaxis_title='Lokasi')
                 st.plotly_chart(fig_location, use_container_width=True)
 
-                with st.expander("🤖 AI Insights (Gemini API)"):
-                    with st.spinner("Menganalisis lokasi..."):
-                        prompt = f"Chart: Top 5 Locations by Engagement.\nData: {top_locations.to_json(orient='split')}"
-                        st.markdown(get_gemini_insights(prompt, gemini_api_key))
+                with st.expander("🤖 AI Insights (Demonstrasi)"):
+                    with st.spinner("Menghasilkan wawasan..."):
+                        st.markdown(get_simulated_insights("location"))
             
             with col_chart6:
                 st.subheader("5 Influencer/Brand Teratas")
@@ -221,35 +263,13 @@ else:
                 fig_influencer.update_layout(template="plotly_dark", yaxis_title='Influencer / Brand')
                 st.plotly_chart(fig_influencer, use_container_width=True)
 
-                with st.expander("🤖 AI Insights (Gemini API)"):
-                    with st.spinner("Menganalisis influencer..."):
-                        prompt = f"Chart: Top 5 Influencers/Brands by Engagement.\nData: {top_influencers.to_json(orient='split')}"
-                        st.markdown(get_gemini_insights(prompt, gemini_api_key))
+                with st.expander("🤖 AI Insights (Demonstrasi)"):
+                    with st.spinner("Menghasilkan wawasan..."):
+                        st.markdown(get_simulated_insights("influencer"))
 
             # --- FITUR STRATEGI LANJUTAN ---
             st.markdown("---")
             st.header("🧠 Analisis & Rekomendasi Strategi")
             if st.button("Hasilkan Ringkasan Strategi Kampanye", key="generate_summary"):
-                if gemini_api_key:
-                    with st.spinner("AI sedang menyusun ringkasan strategi... Ini mungkin memakan waktu sebentar."):
-                        summary_data = df_filtered.sample(min(100, len(df_filtered))).to_dict(orient='records')
-                        
-                        strategy_prompt = f"""
-                        You are a world-class digital media strategist. Based on the following data summary from a media campaign, create a comprehensive strategy report.
-                        Structure your response in markdown with clear headings.
-
-                        Address the following key areas:
-                        1.  **Overall Performance Summary:** What are the general sentiment and engagement trends?
-                        2.  **Platform Focus:** Which platforms should be the main focus and why? Recommend budget/effort allocation percentages.
-                        3.  **Content & Creative Recommendations:** What media types (Video, Image, etc.) and content topics are resonating most with the audience? Suggest specific creative ideas.
-                        4.  **Audience Targeting:** Which locations and influencers/brands should be prioritized? How can they be leveraged?
-                        5.  **Opportunities for Improvement:** What areas are underperforming and what specific actions can be taken to fix them?
-
-                        Data Sample:
-                        {json.dumps(summary_data, indent=2)}
-                        """
-                        
-                        strategy_summary = get_gemini_insights(strategy_prompt, gemini_api_key)
-                        st.markdown(strategy_summary)
-                else:
-                    st.error("Harap masukkan Kunci API Google Gemini Anda di bilah sisi untuk menggunakan fitur canggih ini.")
+                with st.spinner("AI sedang menyusun ringkasan strategi..."):
+                    st.markdown(get_simulated_insights("strategy"))
