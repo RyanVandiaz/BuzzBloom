@@ -1,3 +1,4 @@
+
 # app.py
 
 import streamlit as st
@@ -50,7 +51,7 @@ def generate_campaign_summary_llm(prompt):
         return "Error membuat ringkasan: Terjadi masalah koneksi atau API."
     except Exception as e:
         st.error(f"An unexpected error occurred during summary generation: {e}")
-        return "Error membuat ringkasan: Terjadi kesalahan tak terduga."
+        return "Error membuat ringkasan: Terjadi kesalahan tak terduga."
             messages=[
                 {"role": "system", "content": "You are an expert media analyst. Provide three brief, actionable insights based on the data provided. Use bullet points."},
                 {"role": "user", "content": prompt_text},
