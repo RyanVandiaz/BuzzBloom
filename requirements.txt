@@ -1,4 +1,4 @@
-streamli
-tpandas
+streamlit
+pandas
 plotly
 google-generativeai
