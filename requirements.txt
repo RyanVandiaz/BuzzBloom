@@ -1,4 +1,4 @@
-streamlit
-pandas
-numpy
+streamli
+tpandas
 plotly
+google-generativeai
