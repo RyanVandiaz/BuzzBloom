@@ -30,12 +30,15 @@ def get_ai_insights(prompt_text, api_key):
             api_key=api_key,
         )
         completion = client.chat.completions.create(
-            model="openai/gpt-3.5-turbo", # atau model lain yang tersedia
+            extra_headers={
+              "HTTP-Referer": "http://localhost:8501", # Opsional. URL Situs untuk peringkat di openrouter.ai.
+              "X-Title": "Ryan Media Intelligence", # Opsional. Judul situs untuk peringkat di openrouter.ai.
+            },
+            model="deepseek/deepseek-r1-0528:free",
             messages=[
                 {"role": "system", "content": "You are an expert media analyst. Provide three brief, actionable insights based on the data provided. Use bullet points."},
                 {"role": "user", "content": prompt_text},
-            ],
-            temperature=0.7,
+            ]
         )
         return completion.choices[0].message.content
     except Exception as e:
