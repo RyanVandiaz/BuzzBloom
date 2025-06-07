@@ -171,11 +171,9 @@ else:
                      with st.spinner("Menganalisis tren..."):
                         prompt = f"Chart: Engagement Trend Over Time.\nData: {engagement_trend.to_json(orient='split')}"
                         st.markdown(get_gemini_insights(prompt, gemini_api_key))
-
-            # Lanjutan... (Kode visualisasi lainnya tetap sama)
+            
             st.markdown("<br>", unsafe_allow_html=True)
-        
-            col_chart3, col_chart4, col_chart5 = st.columns(3)
+            col_chart3, col_chart4 = st.columns(2)
 
             with col_chart3:
                 st.subheader("Keterlibatan per Platform")
@@ -200,6 +198,9 @@ else:
                     with st.spinner("Menganalisis jenis media..."):
                         prompt = f"Chart: Media Type Mix.\nData: {media_type_counts.to_json(orient='split')}"
                         st.markdown(get_gemini_insights(prompt, gemini_api_key))
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            col_chart5, col_chart6 = st.columns(2)
             
             with col_chart5:
                 st.subheader("5 Lokasi Teratas")
@@ -212,3 +213,43 @@ else:
                     with st.spinner("Menganalisis lokasi..."):
                         prompt = f"Chart: Top 5 Locations by Engagement.\nData: {top_locations.to_json(orient='split')}"
                         st.markdown(get_gemini_insights(prompt, gemini_api_key))
+            
+            with col_chart6:
+                st.subheader("5 Influencer/Brand Teratas")
+                top_influencers = df_filtered.groupby('Influencer_Brand')['Engagements'].sum().nlargest(5).sort_values(ascending=True).reset_index()
+                fig_influencer = px.bar(top_influencers, y='Influencer_Brand', x='Engagements', orientation='h', color='Engagements', color_continuous_scale='Purples')
+                fig_influencer.update_layout(template="plotly_dark", yaxis_title='Influencer / Brand')
+                st.plotly_chart(fig_influencer, use_container_width=True)
+
+                with st.expander("🤖 AI Insights (Gemini API)"):
+                    with st.spinner("Menganalisis influencer..."):
+                        prompt = f"Chart: Top 5 Influencers/Brands by Engagement.\nData: {top_influencers.to_json(orient='split')}"
+                        st.markdown(get_gemini_insights(prompt, gemini_api_key))
+
+            # --- FITUR STRATEGI LANJUTAN ---
+            st.markdown("---")
+            st.header("🧠 Analisis & Rekomendasi Strategi")
+            if st.button("Hasilkan Ringkasan Strategi Kampanye", key="generate_summary"):
+                if gemini_api_key:
+                    with st.spinner("AI sedang menyusun ringkasan strategi... Ini mungkin memakan waktu sebentar."):
+                        summary_data = df_filtered.sample(min(100, len(df_filtered))).to_dict(orient='records')
+                        
+                        strategy_prompt = f"""
+                        You are a world-class digital media strategist. Based on the following data summary from a media campaign, create a comprehensive strategy report.
+                        Structure your response in markdown with clear headings.
+
+                        Address the following key areas:
+                        1.  **Overall Performance Summary:** What are the general sentiment and engagement trends?
+                        2.  **Platform Focus:** Which platforms should be the main focus and why? Recommend budget/effort allocation percentages.
+                        3.  **Content & Creative Recommendations:** What media types (Video, Image, etc.) and content topics are resonating most with the audience? Suggest specific creative ideas.
+                        4.  **Audience Targeting:** Which locations and influencers/brands should be prioritized? How can they be leveraged?
+                        5.  **Opportunities for Improvement:** What areas are underperforming and what specific actions can be taken to fix them?
+
+                        Data Sample:
+                        {json.dumps(summary_data, indent=2)}
+                        """
+                        
+                        strategy_summary = get_gemini_insights(strategy_prompt, gemini_api_key)
+                        st.markdown(strategy_summary)
+                else:
+                    st.error("Harap masukkan Kunci API Google Gemini Anda di bilah sisi untuk menggunakan fitur canggih ini.")
