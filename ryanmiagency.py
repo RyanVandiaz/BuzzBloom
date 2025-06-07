@@ -55,15 +55,15 @@ st.markdown("""
 st.markdown("---")
 
 # --- BILAH SISI (SIDEBAR) ---
-st.sidebar.header("Filter & Pengaturan")
-
-# Input Kunci API
+st.sidebar.header("Pengaturan")
 st.sidebar.subheader("Pengaturan AI")
 gemini_api_key = st.sidebar.text_input("Masukkan Kunci API Google Gemini Anda", type="password", help="Diperlukan untuk menghasilkan wawasan otomatis.")
 
-# Fitur Unggah File
-st.sidebar.subheader("Unggah Data Anda")
-uploaded_file = st.sidebar.file_uploader("Pilih file CSV", type=["csv"])
+# --- KONTROL TAMPILAN UTAMA ---
+
+# Langkah 1: Unggah Data (di menu utama)
+st.subheader("Langkah 1: Unggah File Data Anda")
+uploaded_file = st.file_uploader("Pilih file CSV", type=["csv"], label_visibility="collapsed")
 
 if uploaded_file is not None:
     # Proses hanya jika file baru diunggah atau belum diproses
@@ -81,38 +81,42 @@ if uploaded_file is not None:
                 st.session_state.data_loaded = True
                 st.session_state.analysis_triggered = False # Reset analisis saat file baru diunggah
                 st.session_state.file_name = uploaded_file.name
-            st.sidebar.success(f"File '{uploaded_file.name}' siap dianalisis.")
+            st.success(f"File '{uploaded_file.name}' berhasil dimuat dan siap dianalisis.")
         except Exception as e:
-            st.sidebar.error(f"Gagal memproses file: {e}")
+            st.error(f"Gagal memproses file: {e}")
             st.session_state.data_loaded = False
 
-
-# --- KONTROL TAMPILAN UTAMA ---
-
+# Tampilkan pesan sambutan jika belum ada data
 if not st.session_state.data_loaded:
-    st.info("Selamat Datang! Silakan unggah file CSV melalui bilah sisi untuk memulai.")
+    st.info("Selamat Datang! Silakan mulai dengan mengunggah file CSV di atas.")
 else:
-    # Tampilkan tombol hanya setelah data dimuat
-    col1, col2, col3 = st.columns([1,2,1])
-    with col2:
-        if st.button("🚀 Analyze Data", use_container_width=True):
-            st.session_state.analysis_triggered = True
+    # Langkah 2: Tombol Analisis
+    st.subheader("Langkah 2: Mulai Analisis")
+    if st.button("🚀 Analyze Data", use_container_width=True, type="primary"):
+        st.session_state.analysis_triggered = True
 
-    # Jika analisis dipicu, tampilkan dashboard
+    # Jika analisis dipicu, tampilkan dashboard lengkap
     if st.session_state.analysis_triggered:
         df = st.session_state.df
         
-        # --- Filter Interaktif ---
-        st.sidebar.markdown("---")
-        st.sidebar.header("Filter Data")
-        min_date = df['Date'].min().date()
-        max_date = df['Date'].max().date()
-        date_range = st.sidebar.date_input("Pilih Rentang Tanggal", value=(min_date, max_date), min_value=min_date, max_value=max_date)
-        start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
-        selected_platforms = st.sidebar.multiselect("Platform", options=df['Platform'].unique(), default=df['Platform'].unique())
-        selected_sentiments = st.sidebar.multiselect("Sentimen", options=df['Sentiment'].unique(), default=df['Sentiment'].unique())
-        selected_media_types = st.sidebar.multiselect("Jenis Media", options=df['Media_Type'].unique(), default=df['Media_Type'].unique())
+        # Filter Interaktif (di menu utama dalam sebuah expander)
+        with st.expander("⚙️ Tampilkan/Sembunyikan Filter", expanded=True):
+            filter_col1, filter_col2, filter_col3 = st.columns([2, 1, 1])
+            
+            with filter_col1:
+                min_date = df['Date'].min().date()
+                max_date = df['Date'].max().date()
+                date_range = st.date_input("Pilih Rentang Tanggal", value=(min_date, max_date), min_value=min_date, max_value=max_date)
+                start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
+            
+            with filter_col2:
+                selected_platforms = st.multiselect("Platform", options=df['Platform'].unique(), default=df['Platform'].unique())
+                selected_sentiments = st.multiselect("Sentimen", options=df['Sentiment'].unique(), default=df['Sentiment'].unique())
+
+            with filter_col3:
+                selected_media_types = st.multiselect("Jenis Media", options=df['Media_Type'].unique(), default=df['Media_Type'].unique())
         
+        # Terapkan filter ke DataFrame
         df_filtered = df[
             (df['Date'] >= start_date) & (df['Date'] <= end_date) &
             (df['Platform'].isin(selected_platforms)) &
@@ -120,20 +124,23 @@ else:
             (df['Media_Type'].isin(selected_media_types))
         ]
 
+        st.markdown("---")
+
         if df_filtered.empty:
             st.warning("Tidak ada data yang cocok dengan filter yang Anda pilih. Coba perluas kriteria filter Anda.")
         else:
             # --- TAMPILAN DASHBOARD ---
+            st.header("Hasil Analisis")
             total_engagement = df_filtered['Engagements'].sum()
             total_posts = len(df_filtered)
             avg_engagement_per_post = total_engagement / total_posts if total_posts > 0 else 0
 
-            st.markdown("### Ringkasan Kinerja")
+            st.markdown("##### Ringkasan Kinerja")
             c1, c2, c3 = st.columns(3)
             c1.metric("Total Keterlibatan", f"{total_engagement:,.0f}")
             c2.metric("Total Postingan", f"{total_posts:,.0f}")
             c3.metric("Keterlibatan Rata-rata/Postingan", f"{avg_engagement_per_post:,.2f}")
-            st.markdown("<hr style='border:1px solid #39FF14'>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
 
             # --- VISUALISASI DAN WAWASAN AI ---
             col_chart1, col_chart2 = st.columns(2)
@@ -166,7 +173,7 @@ else:
                         st.markdown(get_gemini_insights(prompt, gemini_api_key))
 
             # Lanjutan... (Kode visualisasi lainnya tetap sama)
-            st.markdown("<hr style='border:1px solid #39FF14'>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
         
             col_chart3, col_chart4, col_chart5 = st.columns(3)
 
@@ -205,4 +212,3 @@ else:
                     with st.spinner("Menganalisis lokasi..."):
                         prompt = f"Chart: Top 5 Locations by Engagement.\nData: {top_locations.to_json(orient='split')}"
                         st.markdown(get_gemini_insights(prompt, gemini_api_key))
-
