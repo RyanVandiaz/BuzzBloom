@@ -256,6 +256,7 @@ def load_css():
                 padding: 1.5rem;
                 box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
                 margin-bottom: 2rem;
+                box-sizing: border-box; /* Pastikan padding dihitung dalam total lebar */
             }
              .anomaly-card {
                 border: 2px solid #f59e0b;
@@ -289,17 +290,36 @@ def load_css():
             }
 
             /* Atur margin/padding untuk elemen Streamlit di dalam kotak agar lebih rapi */
-            /* Menargetkan teks di dalam div anomali card */
-            .anomaly-card .anomaly-text {
+            /* Menargetkan div yang dihasilkan Streamlit untuk markdown/text input */
+            .anomaly-card [data-testid="stMarkdownContainer"] {
+                margin: 0; /* Hapus margin default */
+                padding: 0; /* Hapus padding default */
+                width: 100%; /* Pastikan mengisi lebar yang tersedia */
+                box-sizing: border-box; /* Penting: agar padding tidak menambah lebar total */
+            }
+
+            .anomaly-card [data-testid="stMarkdownContainer"] p {
+                margin: 0; /* Hapus margin default paragraf */
+                padding: 0; /* Hapus padding default paragraf */
+                word-wrap: break-word;
+                overflow-wrap: break-word;
+                box-sizing: border-box;
+            }
+
+            /* Menargetkan teks di dalam div anomali card secara langsung */
+            /* Ini penting karena st.markdown di dalam div anomaly-text di masa lalu */
+            /* Sekarang, jika langsung st.markdown, atur marginnya */
+            .anomaly-card p { /* Target p tags directly inside anomaly-card (if not wrapped by stMarkdownContainer) */
                 margin-top: 0.5rem;
                 margin-bottom: 1rem;
-                padding: 0 0.5rem; /* Sedikit padding horizontal jika perlu */
+                padding: 0; /* Hapus padding horizontal dari anomaly-text */
+                word-wrap: break-word;
+                overflow-wrap: break-word;
             }
             
-            /* Menargetkan elemen <p> yang dihasilkan oleh st.write atau st.markdown biasa di dalam kontainer */
+            /* Menargetkan elemen <p> yang dihasilkan oleh st.write atau st.markdown biasa di luar anomaly-card, di dalam chart-container/insight-hub */
             .chart-container .stMarkdown p, 
-            .insight-hub .stMarkdown p,
-            .anomaly-card .stMarkdown p {
+            .insight-hub .stMarkdown p {
                 margin-top: 0.25rem; /* Sesuaikan margin atas */
                 margin-bottom: 0.5rem; /* Sesuaikan margin bawah */
                 word-wrap: break-word; /* Ditambahkan: Memastikan teks panjang membungkus */
@@ -315,6 +335,10 @@ def load_css():
             .anomaly-card > div > div > div > .stButton {
                 margin-bottom: 0.5rem;
                 margin-top: 1rem; /* Tambahkan sedikit ruang di atas tombol */
+            }
+            /* Styling untuk tombol radio wawasan */
+            div[data-testid="stRadio"] label {
+                margin-bottom: 0.5rem; /* Beri jarak antar opsi radio */
             }
         </style>
     """, unsafe_allow_html=True)
@@ -507,11 +531,9 @@ if st.session_state.data is not None:
             anomaly = anomalies.iloc[0]
             st.markdown('<div class="anomaly-card">', unsafe_allow_html=True)
             st.markdown("<h3>⚠️ Peringatan Anomali Terdeteksi!</h3>", unsafe_allow_html=True)
-            # Menggunakan st.markdown dengan div untuk memastikan teks berada di dalam kotak
+            # Menggunakan st.markdown langsung (tanpa div anomaly-text) untuk pesan di dalam card
             st.markdown(f"""
-                <div class="anomaly-text">
-                    Kami mendeteksi lonjakan keterlibatan yang tidak biasa pada **{anomaly['Date']}** dengan **{int(anomaly['Engagements']):,}** keterlibatan (rata-rata: {int(mean):,} &plusmn; {int(std):,}).
-                </div>
+                Kami mendeteksi lonjakan keterlibatan yang tidak biasa pada **{anomaly['Date']}** dengan **{int(anomaly['Engagements']):,}** keterlibatan (rata-rata: {int(mean):,} &plusmn; {int(std):,}).
             """, unsafe_allow_html=True)
             
             if st.button("✨ Jelaskan Anomali Ini", key="anomaly_btn"):
