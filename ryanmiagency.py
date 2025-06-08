@@ -83,16 +83,16 @@ def generate_html_report(campaign_summary, post_idea, anomaly_insight, chart_ins
             chart_title = chart_info["title"]
             
             fig = chart_figures_dict.get(chart_key) # Get the figure object from the dictionary
-            # PERBAIKAN: Mengambil semua wawasan versi untuk chart_key
+            # Mengambil semua wawasan versi untuk chart_key
             insights_for_chart = chart_insights.get(chart_key, {}) 
             insight_text_v1 = insights_for_chart.get("Insight Versi 1", "Belum ada wawasan yang dibuat.")
             insight_text_v2 = insights_for_chart.get("Insight Versi 2", "Belum ada wawasan yang dibuat.")
 
 
             if fig: # Check if a figure exists for this chart
-                # PERBAIKAN: Buat salinan figur untuk dimodifikasi sebelum ekspor
+                # Buat salinan figur untuk dimodifikasi sebelum ekspor
                 fig_for_export = go.Figure(fig)
-                # PERBAIKAN: Atur latar belakang dan warna font untuk ekspor agar terlihat baik di laporan HTML yang terang
+                # Atur latar belakang dan warna font untuk ekspor agar terlihat baik di laporan HTML yang terang
                 fig_for_export.update_layout(
                     paper_bgcolor='#FFFFFF',  # Latar belakang kertas putih
                     plot_bgcolor='#FFFFFF',   # Latar belakang plot putih
@@ -403,22 +403,26 @@ if 'chart_figures' not in st.session_state:
 # Flag baru untuk notifikasi berhasil unggah dan analisis
 if 'file_uploaded_and_processed' not in st.session_state:
     st.session_state.file_uploaded_and_processed = False
+# Flag untuk mengontrol visibilitas bagian upload
+if 'show_upload_section' not in st.session_state:
+    st.session_state.show_upload_section = True
 
 
-# Tampilan unggah file (hanya muncul jika data belum diunggah)
-if st.session_state.data is None:
+# Tampilan unggah file (hanya muncul jika data belum diunggah ATAU show_upload_section adalah True)
+if st.session_state.data is None or st.session_state.show_upload_section:
     with st.container():
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
             st.markdown('<div class="chart-container">', unsafe_allow_html=True)
             st.markdown("### ☁️ Unggah File CSV Anda")
             st.write("Pastikan file memiliki kolom 'Date', 'Engagements', 'Sentiment', 'Platform', 'Media_Type', 'Location', dan (opsional) 'Headline'.") # Mengubah deskripsi di sini juga
-            uploaded_file = st.file_uploader("Pilih file CSV", type="csv")
+            uploaded_file = st.file_uploader("Pilih file CSV", type="csv", key="main_file_uploader")
             if uploaded_file is not None:
                 st.session_state.data = parse_csv(uploaded_file)
                 if st.session_state.data is not None:
                     st.success("File CSV berhasil diunggah!")
                     st.session_state.file_uploaded_and_processed = True # Set flag setelah berhasil unggah dan proses
+                    st.session_state.show_upload_section = False # Sembunyikan bagian upload setelah sukses
                 # Streamlit akan otomatis rerun ketika session_state.data berubah
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -431,6 +435,18 @@ if st.session_state.data is not None:
     if st.session_state.file_uploaded_and_processed:
         st.info("Berikut adalah hasil analisis datamu.")
         st.session_state.file_uploaded_and_processed = False # Reset flag agar tidak muncul lagi setelah refresh atau interaksi
+
+    # Tombol untuk menghapus file dan menampilkan kembali bagian upload
+    if st.button("Hapus File Terunggah", key="clear_file_btn"):
+        st.session_state.data = None # Hapus data
+        st.session_state.chart_insights = {} # Bersihkan wawasan
+        st.session_state.campaign_summary = ""
+        st.session_state.post_idea = ""
+        st.session_state.anomaly_insight = ""
+        st.session_state.chart_figures = {}
+        st.session_state.last_filter_state = "" # Reset filter state
+        st.session_state.show_upload_section = True # Tampilkan kembali bagian upload
+        st.rerun() # Rerun aplikasi untuk menampilkan kembali bagian upload
 
     # --- Sidebar Filter ---
     with st.sidebar:
