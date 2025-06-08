@@ -4,8 +4,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import google.generativeai as genai
 import io
-import requests # Diperlukan jika ada bagian lain kode yang menggunakan requests
-from fpdf import FPDF # Import FPDF dari fpdf2
+import requests
+# from fpdf import FPDF # Tidak lagi diperlukan
 
 # --- KONFIGURASI HALAMAN & GAYA ---
 # Mengatur konfigurasi halaman. Ini harus menjadi perintah pertama Streamlit.
@@ -58,52 +58,73 @@ def get_ai_insight(prompt):
         st.error(f"Error saat memanggil Gemini API: {e}. Pastikan API Key valid dan terhubung ke internet.")
         return "Gagal membuat wawasan: Terjadi masalah koneksi atau API."
 
-def generate_pdf_report(campaign_summary, post_idea, anomaly_insight, chart_insights):
+def generate_html_report(campaign_summary, post_idea, anomaly_insight, chart_insights):
     """
-    Membuat laporan PDF dari wawasan yang dihasilkan AI.
+    Membuat laporan HTML dari wawasan yang dihasilkan AI.
     """
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("helvetica", "B", 16)
-    pdf.cell(0, 10, "Laporan Media Intelligence Dashboard", 0, 1, "C")
-    pdf.ln(10)
+    current_date = pd.Timestamp.now().strftime("%d-%m-%Y %H:%M")
 
-    pdf.set_font("helvetica", "B", 12)
-    pdf.cell(0, 10, "1. Ringkasan Strategi Kampanye", 0, 1, "L")
-    pdf.set_font("helvetica", "", 10)
-    pdf.multi_cell(0, 7, campaign_summary if campaign_summary else "Belum ada ringkasan yang dibuat.")
-    pdf.ln(5)
-
-    pdf.set_font("helvetica", "B", 12)
-    pdf.cell(0, 10, "2. Ide Konten AI", 0, 1, "L")
-    pdf.set_font("helvetica", "", 10)
-    pdf.multi_cell(0, 7, post_idea if post_idea else "Belum ada ide postingan yang dibuat.")
-    pdf.ln(5)
-
+    anomaly_section_html = ""
     if anomaly_insight:
-        pdf.set_font("helvetica", "B", 12)
-        pdf.cell(0, 10, "3. Wawasan Anomali", 0, 1, "L")
-        pdf.set_font("helvetica", "", 10)
-        pdf.multi_cell(0, 7, anomaly_insight)
-        pdf.ln(5)
-
-    pdf.set_font("helvetica", "B", 12)
-    pdf.cell(0, 10, "4. Wawasan Grafik", 0, 1, "L")
-    pdf.set_font("helvetica", "", 10)
+        anomaly_section_html = f"""
+        <div class="section">
+            <h2>3. Wawasan Anomali</h2>
+            <div class="insight-box">{anomaly_insight}</div>
+        </div>
+        """
+    
+    chart_insights_html = ""
     if chart_insights:
         for title, insight_text in chart_insights.items():
-            pdf.set_font("helvetica", "B", 11)
-            pdf.cell(0, 7, f"- {title}", 0, 1, "L")
-            pdf.set_font("helvetica", "", 10)
-            pdf.multi_cell(0, 7, insight_text)
-            pdf.ln(2)
+            if insight_text and insight_text.strip() != "Belum ada wawasan yang dibuat.": # Hindari menampilkan bagian kosong
+                chart_insights_html += f"""
+                <div class="insight-sub-section">
+                    <h3>{title}</h3>
+                    <div class="insight-box">{insight_text}</div>
+                </div>
+                """
     else:
-        pdf.multi_cell(0, 7, "Belum ada wawasan grafik yang dibuat.")
-    pdf.ln(5)
+        chart_insights_html = "<p>Belum ada wawasan grafik yang dibuat.</p>"
 
-    pdf_output = pdf.output(dest='S').encode('latin-1') # Output ke string/byte
-    return pdf_output
 
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Laporan Media Intelligence Dashboard</title>
+        <meta charset="UTF-8">
+        <style>
+            body {{ font-family: 'Inter', sans-serif; line-height: 1.6; color: #333; margin: 20px; background-color: #f4f4f4; }}
+            h1, h2, h3, h4 {{ color: #2c3e50; margin-top: 1.5em; margin-bottom: 0.5em; }}
+            .section {{ background-color: #fff; padding: 15px; margin-bottom: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
+            .insight-sub-section {{ margin-top: 1em; padding-left: 15px; border-left: 3px solid #eee; }}
+            .insight-box {{ background-color: #e9ecef; padding: 10px; border-radius: 5px; font-size: 0.9em; white-space: pre-wrap; }}
+        </style>
+    </head>
+    <body>
+        <h1>Laporan Media Intelligence Dashboard</h1>
+        <p>Tanggal Laporan: {current_date}</p>
+
+        <div class="section">
+            <h2>1. Ringkasan Strategi Kampanye</h2>
+            <div class="insight-box">{campaign_summary if campaign_summary else "Belum ada ringkasan yang dibuat."}</div>
+        </div>
+
+        <div class="section">
+            <h2>2. Ide Konten AI</h2>
+            <div class="insight-box">{post_idea if post_idea else "Belum ada ide postingan yang dibuat."}</div>
+        </div>
+
+        {anomaly_section_html}
+
+        <div class="section">
+            <h2>4. Wawasan Grafik</h2>
+            {chart_insights_html}
+        </div>
+    </body>
+    </html>
+    """
+    return html_content.encode('utf-8') # Encoding to bytes for download
 
 def load_css():
     """Menyuntikkan CSS kustom untuk gaya visual tingkat lanjut."""
@@ -522,23 +543,34 @@ if st.session_state.data is not None:
             
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- Bagian Unduh Laporan PDF ---
+    # --- Bagian Unduh Laporan HTML (Ganti PDF) ---
     st.markdown("---")
     st.markdown("<h3>📄 Unduh Laporan Analisis</h3>", unsafe_allow_html=True)
-    if st.button("Unduh Laporan PDF", key="download_pdf_btn", type="primary", use_container_width=True):
-        with st.spinner("Membangun laporan PDF..."):
-            pdf_data = generate_pdf_report(
+    
+    # Kumpulkan semua wawasan untuk laporan HTML
+    chart_insights_for_report = {
+        chart_info["title"]: st.session_state.chart_insights.get(chart_info["key"], "")
+        for chart_info in charts_to_display
+    }
+
+    if st.button("Unduh Laporan HTML", key="download_html_btn", type="primary", use_container_width=True):
+        with st.spinner("Membangun laporan HTML..."):
+            html_data = generate_html_report(
                 st.session_state.campaign_summary,
                 st.session_state.post_idea,
                 st.session_state.anomaly_insight,
-                {chart_info["title"]: st.session_state.chart_insights.get(chart_info["key"], "") for chart_info in charts_to_display}
+                chart_insights_for_report
             )
-            st.download_button(
-                label="Klik untuk Mengunduh",
-                data=pdf_data,
-                file_name="Laporan_Media_Intelligence.pdf",
-                mime="application/pdf",
-                key="actual_download_button"
-            )
-        st.success("Laporan PDF siap diunduh!")
+            
+            if html_data:
+                st.download_button(
+                    label="Klik untuk Mengunduh",
+                    data=html_data,
+                    file_name="Laporan_Media_Intelligence.html",
+                    mime="text/html",
+                    key="actual_download_button_html"
+                )
+                st.success("Laporan HTML siap diunduh! Buka file ini di browser Anda, lalu gunakan fitur cetak browser untuk menyimpannya sebagai PDF jika diperlukan.")
+            else:
+                st.error("Gagal membuat laporan HTML.")
 
