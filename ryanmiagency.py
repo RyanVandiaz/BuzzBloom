@@ -406,7 +406,7 @@ if 'file_uploaded_and_processed' not in st.session_state:
 
 
 # Tampilan unggah file (hanya muncul jika data belum diunggah)
-if st.session_state.data is None: # Hapus 'or st.session_state.show_upload_section'
+if st.session_state.data is None: 
     with st.container():
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
@@ -419,8 +419,7 @@ if st.session_state.data is None: # Hapus 'or st.session_state.show_upload_secti
                 if st.session_state.data is not None:
                     st.success("File CSV berhasil diunggah!")
                     st.session_state.file_uploaded_and_processed = True # Set flag setelah berhasil unggah dan proses
-                    # st.session_state.show_upload_section = False # Baris ini tidak lagi diperlukan
-                # Streamlit akan otomatis rerun ketika st.session_state.data berubah
+                    st.rerun() # PERBAIKAN: Tambahkan rerun() untuk memaksa update UI segera
             st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -442,7 +441,7 @@ if st.session_state.data is not None:
         st.session_state.anomaly_insight = ""
         st.session_state.chart_figures = {}
         st.session_state.last_filter_state = "" # Reset filter state
-        # st.session_state.show_upload_section = True # Baris ini tidak lagi diperlukan
+        st.session_state.file_uploaded_and_processed = False # Reset ini juga untuk unggahan berikutnya
         st.rerun() # Rerun aplikasi untuk menampilkan kembali bagian upload
 
 
