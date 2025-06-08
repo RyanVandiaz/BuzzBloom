@@ -83,13 +83,23 @@ def generate_html_report(campaign_summary, post_idea, anomaly_insight, chart_ins
             chart_title = chart_info["title"]
             
             fig = chart_figures_dict.get(chart_key) # Get the figure object from the dictionary
-            insight_text = chart_insights.get(chart_key, "Belum ada wawasan yang dibuat.") # Get insight using chart key (not full title for simplicity in report)
+            # PERBAIKAN: Mengambil insight berdasarkan chart_key, bukan chart_title
+            insight_text = chart_insights.get(chart_key, "Belum ada wawasan yang dibuat.") 
 
             if fig: # Check if a figure exists for this chart
+                # PERBAIKAN: Buat salinan figur untuk dimodifikasi sebelum ekspor
+                fig_for_export = go.Figure(fig)
+                # PERBAIKAN: Atur latar belakang dan warna font untuk ekspor agar terlihat baik di laporan HTML yang terang
+                fig_for_export.update_layout(
+                    paper_bgcolor='#FFFFFF',  # Latar belakang kertas putih
+                    plot_bgcolor='#FFFFFF',   # Latar belakang plot putih
+                    font_color='#333333'      # Warna font gelap
+                )
+                
                 try:
                     # Convert Plotly figure to PNG bytes
                     # Adjust width, height, and scale for better resolution in the report
-                    img_bytes = pio.to_image(fig, format="png", width=900, height=550, scale=1.5)
+                    img_bytes = pio.to_image(fig_for_export, format="png", width=900, height=550, scale=1.5)
                     img_base64 = base64.b64encode(img_bytes).decode('utf-8')
                     
                     chart_figures_html_sections += f"""
@@ -630,7 +640,7 @@ if st.session_state.data is not None:
     
     # Kumpulkan semua wawasan dan objek grafik untuk laporan HTML
     chart_insights_for_report = {
-        chart_info["title"]: st.session_state.chart_insights.get(chart_info["key"], "")
+        chart_info["key"]: st.session_state.chart_insights.get(chart_info["key"], "") # Menggunakan key sebagai kunci
         for chart_info in charts_to_display
     }
 
@@ -640,7 +650,7 @@ if st.session_state.data is not None:
                 st.session_state.campaign_summary,
                 st.session_state.post_idea,
                 st.session_state.anomaly_insight,
-                chart_insights_for_report,
+                chart_insights_for_report, # Sekarang berisi kunci `chart_info["key"]`
                 st.session_state.chart_figures, # Kirim objek grafik
                 charts_to_display # Kirim informasi grafik untuk judul
             )
