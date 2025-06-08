@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import google.generativeai as genai
 import io
 import requests # Diperlukan jika ada bagian lain kode yang menggunakan requests
+from fpdf import FPDF # Import FPDF dari fpdf2
 
 # --- KONFIGURASI HALAMAN & GAYA ---
 # Mengatur konfigurasi halaman. Ini harus menjadi perintah pertama Streamlit.
@@ -57,6 +58,53 @@ def get_ai_insight(prompt):
         st.error(f"Error saat memanggil Gemini API: {e}. Pastikan API Key valid dan terhubung ke internet.")
         return "Gagal membuat wawasan: Terjadi masalah koneksi atau API."
 
+def generate_pdf_report(campaign_summary, post_idea, anomaly_insight, chart_insights):
+    """
+    Membuat laporan PDF dari wawasan yang dihasilkan AI.
+    """
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("helvetica", "B", 16)
+    pdf.cell(0, 10, "Laporan Media Intelligence Dashboard", 0, 1, "C")
+    pdf.ln(10)
+
+    pdf.set_font("helvetica", "B", 12)
+    pdf.cell(0, 10, "1. Ringkasan Strategi Kampanye", 0, 1, "L")
+    pdf.set_font("helvetica", "", 10)
+    pdf.multi_cell(0, 7, campaign_summary if campaign_summary else "Belum ada ringkasan yang dibuat.")
+    pdf.ln(5)
+
+    pdf.set_font("helvetica", "B", 12)
+    pdf.cell(0, 10, "2. Ide Konten AI", 0, 1, "L")
+    pdf.set_font("helvetica", "", 10)
+    pdf.multi_cell(0, 7, post_idea if post_idea else "Belum ada ide postingan yang dibuat.")
+    pdf.ln(5)
+
+    if anomaly_insight:
+        pdf.set_font("helvetica", "B", 12)
+        pdf.cell(0, 10, "3. Wawasan Anomali", 0, 1, "L")
+        pdf.set_font("helvetica", "", 10)
+        pdf.multi_cell(0, 7, anomaly_insight)
+        pdf.ln(5)
+
+    pdf.set_font("helvetica", "B", 12)
+    pdf.cell(0, 10, "4. Wawasan Grafik", 0, 1, "L")
+    pdf.set_font("helvetica", "", 10)
+    if chart_insights:
+        for title, insight_text in chart_insights.items():
+            pdf.set_font("helvetica", "B", 11)
+            pdf.cell(0, 7, f"- {title}", 0, 1, "L")
+            pdf.set_font("helvetica", "", 10)
+            pdf.multi_cell(0, 7, insight_text)
+            pdf.ln(2)
+    else:
+        pdf.multi_cell(0, 7, "Belum ada wawasan grafik yang dibuat.")
+    pdf.ln(5)
+
+    pdf_output = pdf.output(dest='S').encode('latin-1') # Output ke string/byte
+    return pdf_output
+
+
 def load_css():
     """Menyuntikkan CSS kustom untuk gaya visual tingkat lanjut."""
     st.markdown("""
@@ -100,6 +148,11 @@ def load_css():
                 color: #5eead4;
                 font-weight: 600;
             }
+            /* Menyesuaikan elemen di sidebar agar rapi */
+            [data-testid="stSidebar"] .stSelectbox,
+            [data-testid="stSidebar"] .stDateInput {
+                margin-bottom: 1rem;
+            }
 
             /* Container utama dan kartu */
             .stVerticalBlock > .stHorizontalBlock:nth-child(1) {
@@ -136,32 +189,34 @@ def load_css():
                 font-size: 0.9rem;
             }
             
-            /* Judul Kartu */
-            .chart-container h3, .insight-hub h3, .anomaly-card h3 {
+            /* Judul dalam kartu, pastikan menempel ke padding atas dan memiliki margin bawah yang konsisten */
+            .chart-container h3, .insight-hub h3, .anomaly-card h3,
+            .insight-hub h4 { /* Menambahkan h4 untuk judul di dalam insight-hub */
                 color: #5eead4;
-                margin-bottom: 1rem;
+                margin-top: 0; /* Penting: Hapus margin atas default Streamlit */
+                margin-bottom: 1rem; /* Jaga konsistensi margin bawah */
                 display: flex;
                 align-items: center;
                 gap: 0.5rem;
                 font-weight: 600;
             }
-            
-            /* Tombol */
-            .stButton>button {
-                border-radius: 0.5rem;
-                font-weight: bold;
-                color: white;
-                transition: all 0.2s ease-in-out;
-                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+
+            /* Atur margin/padding untuk elemen Streamlit di dalam kotak agar lebih rapi */
+            .chart-container > div > div > div > .stMarkdown, /* Menargetkan st.write/st.markdown */
+            .insight-hub > div > div > div > .stMarkdown,
+            .anomaly-card > div > div > div > .stMarkdown {
+                margin-bottom: 0.75rem; /* Memberi jarak antar teks */
             }
-            /* Tombol default/insight */
-            .stButton>button:not(:hover) {
-                background-image: linear-gradient(to right, #8b5cf6, #a855f7);
-                border: 1px solid #a855f7;
+
+            .chart-container > div > div > div > .stFileUploader {
+                margin-bottom: 1rem;
             }
-            .stButton>button:hover {
-                transform: scale(1.05);
-                box-shadow: 0 4px 20px rgba(168, 85, 247, 0.4);
+
+            .chart-container > div > div > div > .stButton,
+            .insight-hub > div > div > div > .stButton,
+            .anomaly-card > div > div > div > .stButton {
+                margin-bottom: 0.5rem;
+                margin-top: 1rem; /* Tambahkan sedikit ruang di atas tombol */
             }
             
         </style>
@@ -268,7 +323,7 @@ if st.session_state.data is not None:
     if platform != "All":
         filtered_df = filtered_df[filtered_df['Platform'] == platform]
     if sentiment != "All":
-        filtered_df = filtered_df[filtered_df['Sentiment'] == sentiment] # Memperbaiki baris ini
+        filtered_df = filtered_df[filtered_df['Sentiment'] == sentiment]
     if media_type != "All":
         filtered_df = filtered_df[filtered_df['Media Type'] == media_type]
     if location != "All":
@@ -281,7 +336,7 @@ if st.session_state.data is not None:
 
     with col1:
         st.markdown("<h4>⚡ Ringkasan Strategi Kampanye</h4>", unsafe_allow_html=True)
-        if st.button("Buat Ringkasan", key="summary_btn", use_container_width=True): # Hapus `and api_configured` karena sudah dicek di get_ai_insight
+        if st.button("Buat Ringkasan", key="summary_btn", use_container_width=True):
             with st.spinner("Membuat ringkasan strategi..."):
                 prompt = f"""
                 Anda adalah seorang konsultan strategi media senior. Analisis data kampanye berikut secara komprehensif. Berikan ringkasan eksekutif (3-4 kalimat) diikuti oleh 3 rekomendasi strategis utama yang paling berdampak. 
@@ -300,9 +355,9 @@ if st.session_state.data is not None:
 
     with col2:
         st.markdown("<h4>💡 Generator Ide Konten AI</h4>", unsafe_allow_html=True)
-        if st.button("✨ Buat Ide Postingan", key="idea_btn", use_container_width=True): # Hapus `and api_configured`
+        if st.button("✨ Buat Ide Postingan", key="idea_btn", use_container_width=True):
             with st.spinner("Mencari ide terbaik..."):
-                if not filtered_df.empty: # Tambahkan pengecekan agar tidak error jika filtered_df kosong
+                if not filtered_df.empty:
                     best_platform_series = filtered_df.groupby('Platform')['Engagements'].sum()
                     if not best_platform_series.empty:
                         best_platform = best_platform_series.idxmax()
@@ -336,22 +391,20 @@ if st.session_state.data is not None:
 
     # --- Deteksi Anomali ---
     engagement_trend = filtered_df.groupby(filtered_df['Date'].dt.date)['Engagements'].sum().reset_index()
-    if len(engagement_trend) > 7: # Membutuhkan setidaknya beberapa titik data untuk statistik
+    if len(engagement_trend) > 7:
         mean = engagement_trend['Engagements'].mean()
         std = engagement_trend['Engagements'].std()
-        # Hindari pembagian oleh nol jika std adalah nol (semua keterlibatan sama)
-        anomaly_threshold = mean + (2 * std) if std > 0 else mean + 0.1 # Ambang batas minimal jika tidak ada variasi
+        anomaly_threshold = mean + (2 * std) if std > 0 else mean + 0.1
         anomalies = engagement_trend[engagement_trend['Engagements'] > anomaly_threshold]
         
         if not anomalies.empty:
-            anomaly = anomalies.iloc[0] # Ambil anomali pertama
+            anomaly = anomalies.iloc[0]
             st.markdown('<div class="anomaly-card">', unsafe_allow_html=True)
             st.markdown("<h3>⚠️ Peringatan Anomali Terdeteksi!</h3>", unsafe_allow_html=True)
             st.write(f"Kami mendeteksi lonjakan keterlibatan yang tidak biasa pada **{anomaly['Date']}** dengan **{int(anomaly['Engagements']):,}** keterlibatan (rata-rata: {int(mean):,} ± {int(std):,}).")
             
-            if st.button("✨ Jelaskan Anomali Ini", key="anomaly_btn"): # Hapus `and api_configured`
+            if st.button("✨ Jelaskan Anomali Ini", key="anomaly_btn"):
                 with st.spinner("Menganalisis penyebab anomali..."):
-                    # Ambil data spesifik untuk hari anomali
                     anomaly_day_data = filtered_df[filtered_df['Date'].dt.date == anomaly['Date']]
                     top_headlines_on_anomaly_day = ', '.join(anomaly_day_data.nlargest(3, 'Engagements')['Headline'].tolist())
 
@@ -446,7 +499,7 @@ if st.session_state.data is not None:
                 st.plotly_chart(fig, use_container_width=True)
 
                 # Tombol untuk membuat wawasan AI untuk setiap grafik
-                if st.button(f"✨ Buat Wawasan AI", key=f"insight_btn_{chart['key']}"): # Hapus `and api_configured`
+                if st.button(f"✨ Buat Wawasan AI", key=f"insight_btn_{chart['key']}"):
                     with st.spinner(f"Menganalisis {chart['title']}..."):
                         if chart_data_for_prompt: # Pastikan ada data untuk prompt
                             prompt = get_chart_prompt(chart['key'], chart_data_for_prompt)
@@ -468,4 +521,24 @@ if st.session_state.data is not None:
                     st.markdown(f'<div class="insight-box">{insight_text}</div>', unsafe_allow_html=True)
             
             st.markdown('</div>', unsafe_allow_html=True)
+
+    # --- Bagian Unduh Laporan PDF ---
+    st.markdown("---")
+    st.markdown("<h3>📄 Unduh Laporan Analisis</h3>", unsafe_allow_html=True)
+    if st.button("Unduh Laporan PDF", key="download_pdf_btn", type="primary", use_container_width=True):
+        with st.spinner("Membangun laporan PDF..."):
+            pdf_data = generate_pdf_report(
+                st.session_state.campaign_summary,
+                st.session_state.post_idea,
+                st.session_state.anomaly_insight,
+                {chart_info["title"]: st.session_state.chart_insights.get(chart_info["key"], "") for chart_info in charts_to_display}
+            )
+            st.download_button(
+                label="Klik untuk Mengunduh",
+                data=pdf_data,
+                file_name="Laporan_Media_Intelligence.pdf",
+                mime="application/pdf",
+                key="actual_download_button"
+            )
+        st.success("Laporan PDF siap diunduh!")
 
