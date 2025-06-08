@@ -636,16 +636,16 @@ if st.session_state.data is not None:
 
     # --- Bagian Unduh Laporan HTML ---
     st.markdown("---")
-    st.markdown("<h3>📄 Unduh Laporan Analisis</h3>", unsafe_allow_html=True)
+    st.markdown("<h3>📄 Unduh Laporan Analisis Anda </h3>", unsafe_allow_html=True)
     
-    # Kumpulkan semua wawasan dan objek grafik untuk laporan HTML
+    # Kumpulkan semua wawasan dan objek grafik untuk laporan 
     chart_insights_for_report = {
         chart_info["key"]: st.session_state.chart_insights.get(chart_info["key"], "") # Menggunakan key sebagai kunci
         for chart_info in charts_to_display
     }
 
-    if st.button("Unduh Laporan HTML", key="download_html_btn", type="primary", use_container_width=True):
-        with st.spinner("Membangun laporan HTML dengan grafik..."):
+    if st.button("Unduh Laporanmu", key="download_html_btn", type="primary", use_container_width=True):
+        with st.spinner("Membangun laporan dengan grafik..."):
             html_data = generate_html_report(
                 st.session_state.campaign_summary,
                 st.session_state.post_idea,
@@ -663,6 +663,6 @@ if st.session_state.data is not None:
                     mime="text/html",
                     key="actual_download_button_html"
                 )
-                st.success("Laporan HTML siap diunduh! Buka file ini di browser Anda, lalu gunakan fitur cetak browser untuk menyimpannya sebagai PDF jika diperlukan.")
+                st.success("Laporanmu siap diunduh! Buka file ini di browser Anda, lalu gunakan fitur cetak browser untuk menyimpannya sebagai PDF jika diperlukan.")
             else:
-                st.error("Gagal membuat laporan HTML. Pastikan semua grafik telah dibuat atau ada data.")
+                st.error("Gagal membuat laporan . Pastikan semua grafik telah dibuat atau ada data.")
