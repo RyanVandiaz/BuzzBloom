@@ -400,9 +400,12 @@ if 'anomaly_insight' not in st.session_state:
 # Tambahkan inisialisasi untuk menyimpan objek grafik
 if 'chart_figures' not in st.session_state:
     st.session_state.chart_figures = {}
+# Flag baru untuk notifikasi berhasil unggah dan analisis
+if 'file_uploaded_and_processed' not in st.session_state:
+    st.session_state.file_uploaded_and_processed = False
 
 
-# Tampilan unggah file
+# Tampilan unggah file (hanya muncul jika data belum diunggah)
 if st.session_state.data is None:
     with st.container():
         col1, col2, col3 = st.columns([1,2,1])
@@ -413,6 +416,9 @@ if st.session_state.data is None:
             uploaded_file = st.file_uploader("Pilih file CSV", type="csv")
             if uploaded_file is not None:
                 st.session_state.data = parse_csv(uploaded_file)
+                if st.session_state.data is not None:
+                    st.success("File CSV berhasil diunggah!")
+                    st.session_state.file_uploaded_and_processed = True # Set flag setelah berhasil unggah dan proses
                 # Streamlit akan otomatis rerun ketika session_state.data berubah
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -420,6 +426,11 @@ if st.session_state.data is None:
 # Tampilan Dasbor Utama (setelah file diunggah)
 if st.session_state.data is not None:
     df = st.session_state.data
+
+    # Tampilkan notifikasi "Berikut adalah hasil analisis datamu." hanya sekali
+    if st.session_state.file_uploaded_and_processed:
+        st.info("Berikut adalah hasil analisis datamu.")
+        st.session_state.file_uploaded_and_processed = False # Reset flag agar tidak muncul lagi setelah refresh atau interaksi
 
     # --- Sidebar Filter ---
     with st.sidebar:
@@ -443,6 +454,8 @@ if st.session_state.data is not None:
             st.session_state.anomaly_insight = ""
             st.session_state.chart_figures = {} # Reset chart figures juga
             st.session_state.last_filter_state = filter_state
+            # Jika filter berubah, pastikan notifikasi awal tidak muncul lagi
+            st.session_state.file_uploaded_and_processed = False
 
 
     # Filter DataFrame
