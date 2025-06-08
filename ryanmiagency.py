@@ -263,10 +263,12 @@ def load_css():
             }
 
             /* Atur margin/padding untuk elemen Streamlit di dalam kotak agar lebih rapi */
-            .chart-container > div > div > div > .stMarkdown, /* Menargetkan st.write/st.markdown */
-            .insight-hub > div > div > div > .stMarkdown,
-            .anomaly-card > div > div > div > .stMarkdown {
-                margin-bottom: 0.75rem; /* Memberi jarak antar teks */
+            /* Target langsung elemen <p> yang dihasilkan oleh st.write atau st.markdown biasa */
+            .chart-container p, 
+            .insight-hub p,
+            .anomaly-card p {
+                margin-top: 0; /* Hapus margin atas default */
+                margin-bottom: 0.75rem; /* Beri jarak antar teks */
             }
 
             .chart-container > div > div > div > .stFileUploader {
@@ -466,7 +468,12 @@ if st.session_state.data is not None:
             anomaly = anomalies.iloc[0]
             st.markdown('<div class="anomaly-card">', unsafe_allow_html=True)
             st.markdown("<h3>⚠️ Peringatan Anomali Terdeteksi!</h3>", unsafe_allow_html=True)
-            st.write(f"Kami mendeteksi lonjakan keterlibatan yang tidak biasa pada **{anomaly['Date']}** dengan **{int(anomaly['Engagements']):,}** keterlibatan (rata-rata: {int(mean):,} ± {int(std):,}).")
+            # Menggunakan st.markdown dengan div untuk memastikan teks berada di dalam kotak
+            st.markdown(f"""
+                <div class="anomaly-text">
+                    Kami mendeteksi lonjakan keterlibatan yang tidak biasa pada **{anomaly['Date']}** dengan **{int(anomaly['Engagements']):,}** keterlibatan (rata-rata: {int(mean):,} ± {int(std):,}).
+                </div>
+            """, unsafe_allow_html=True)
             
             if st.button("✨ Jelaskan Anomali Ini", key="anomaly_btn"):
                 with st.spinner("Menganalisis penyebab anomali..."):
