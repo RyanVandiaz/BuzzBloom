@@ -1,224 +1,22 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { PieChart, Pie, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
-import { UploadCloud, Filter, Calendar, TrendingUp, BarChart2, PieChart as PieChartIcon, MapPin, Smile, FileText, Download, Zap, BrainCircuit, Lightbulb, AlertTriangle } from 'lucide-react';
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import google.generativeai as genai
+import io
 
-// Helper function to parse CSV data - now handles more columns
-const parseCSV = (text) => {
-    const lines = text.split('\n').filter(line => line.trim() !== '');
-    if (lines.length === 0) return [];
-    // Make headers case-insensitive and trim spaces
-    const headers = lines[0].split(',').map(header => header.trim().toLowerCase());
-    const data = [];
-    for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(','); // Don't trim values yet
-        if (values.length > headers.length) {
-            // Handle commas within a quoted field
-            const newValues = [];
-            let inQuote = false;
-            let currentVal = '';
-            for (const val of lines[i].split(',')) {
-                if (!inQuote) {
-                    if (val.startsWith('"')) {
-                        inQuote = true;
-                        currentVal += val.substring(1);
-                    } else {
-                        newValues.push(val);
-                    }
-                } else {
-                    if (val.endsWith('"')) {
-                        inQuote = false;
-                        currentVal += ',' + val.slice(0, -1);
-                        newValues.push(currentVal);
-                        currentVal = '';
-                    } else {
-                        currentVal += ',' + val;
-                    }
-                }
-            }
-            if (newValues.length !== headers.length) {
-                 console.warn(`Skipping malformed row after attempting to fix commas: ${lines[i]}`);
-                 continue;
-            }
-            values.splice(0, values.length, ...newValues);
+# --- KONFIGURASI HALAMAN & GAYA ---
+# Mengatur konfigurasi halaman. Ini harus menjadi perintah pertama Streamlit.
+st.set_page_config(
+    page_title="Media Intelligence Dashboard",
+    page_icon="🧠",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-        } else if (values.length < headers.length) {
-            console.warn(`Skipping malformed row (not enough columns): ${lines[i]}`);
-            continue;
-        }
+# --- FUNGSI UTAMA & LOGIKA ---
 
-        let row = {};
-        headers.forEach((header, index) => {
-            // Use original header for the key but map from lowercase
-            const originalHeader = lines[0].split(',')[index].trim();
-            row[originalHeader] = (values[index] || '').trim();
-        });
-        data.push(row);
-    }
-    return data;
-};
-
-// Colors for charts (Modern & Cool style)
-const COLORS = ['#06B6D4', '#6366F1', '#EC4899', '#8B5CF6', '#F59E0B', '#10B981', '#3B82F6', '#EF4444'];
-
-// Function to dynamically load scripts
-const loadScript = (src) => {
-    return new Promise((resolve, reject) => {
-      if (document.querySelector(`script[src="${src}"]`)) {
-        resolve();
-        return;
-      }
-      const script = document.createElement('script');
-      script.src = src;
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error(`Gagal memuat script: ${src}`));
-      document.head.appendChild(script);
-    });
-};
-
-function App() {
-    const [originalData, setOriginalData] = useState([]);
-    const [cleanedData, setCleanedData] = useState([]);
-    const [fileUploaded, setFileUploaded] = useState(false);
-    const fileInputRef = useRef(null);
-    const dashboardRef = useRef(null);
-
-    // Filter states
-    const [platformFilter, setPlatformFilter] = useState('All');
-    const [sentimentFilter, setSentimentFilter] = useState('All');
-    const [mediaTypeFilter, setMediaTypeFilter] = useState('All');
-    const [locationFilter, setLocationFilter] = useState('All');
-    const [startDateFilter, setStartDateFilter] = useState('');
-    const [endDateFilter, setEndDateFilter] = useState('');
-
-    // Unique values for filters
-    const [uniquePlatforms, setUniquePlatforms] = useState([]);
-    const [uniqueSentiments, setUniqueSentiments] = useState([]);
-    const [uniqueMediaTypes, setUniqueMediaTypes] = useState([]);
-    const [uniqueLocations, setUniqueLocations] = useState([]);
-
-    // AI-Generated Insights states
-    const [chartInsights, setChartInsights] = useState({ sentiment: '', trend: '', platform: '', mediaType: '', location: '' });
-    const [isGeneratingChartInsights, setIsGeneratingChartInsights] = useState({});
-    const [campaignSummary, setCampaignSummary] = useState('');
-    const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-    const [postIdea, setPostIdea] = useState('');
-    const [isGeneratingPost, setIsGeneratingPost] = useState(false);
-    const [anomaly, setAnomaly] = useState(null);
-    const [anomalyInsight, setAnomalyInsight] = useState('');
-    const [isGeneratingAnomalyInsight, setIsGeneratingAnomalyInsight] = useState(false);
-
-    // State for PDF export loading and error
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState(null);
-    
-    // Effect for data cleaning and getting unique filter values
-    useEffect(() => {
-        if (originalData.length > 0) {
-            const cleaned = originalData.map(row => {
-                const date = new Date(row.Date);
-                const engagements = parseInt(row.Engagements) || 0;
-                return { ...row, Date: isNaN(date.getTime()) ? null : date, Engagements: engagements };
-            }).filter(row => row.Date !== null);
-            setCleanedData(cleaned);
-            setUniquePlatforms(['All', ...new Set(cleaned.map(d => d.Platform).filter(Boolean))].sort());
-            setUniqueSentiments(['All', ...new Set(cleaned.map(d => d.Sentiment).filter(Boolean))].sort());
-            setUniqueMediaTypes(['All', ...new Set(cleaned.map(d => d['Media Type']).filter(Boolean))].sort());
-            setUniqueLocations(['All', ...new Set(cleaned.map(d => d.Location).filter(Boolean))].sort());
-        }
-    }, [originalData]);
-
-    const filteredData = useMemo(() => {
-        if (cleanedData.length === 0) return [];
-        let data = cleanedData;
-        if (platformFilter !== 'All') data = data.filter(d => d.Platform === platformFilter);
-        if (sentimentFilter !== 'All') data = data.filter(d => d.Sentiment === sentimentFilter);
-        if (mediaTypeFilter !== 'All') data = data.filter(d => d['Media Type'] === mediaTypeFilter);
-        if (locationFilter !== 'All') data = data.filter(d => d.Location === locationFilter);
-        if (startDateFilter) data = data.filter(d => d.Date >= new Date(startDateFilter));
-        if (endDateFilter) data = data.filter(d => d.Date <= new Date(endDateFilter));
-        return data;
-    }, [cleanedData, platformFilter, sentimentFilter, mediaTypeFilter, locationFilter, startDateFilter, endDateFilter]);
-
-    // Reset insights when filter changes
-    useEffect(() => {
-        setCampaignSummary('');
-        setPostIdea('');
-        setAnomaly(null);
-        setAnomalyInsight('');
-        setChartInsights({ sentiment: '', trend: '', platform: '', mediaType: '', location: '' });
-    }, [filteredData]);
-
-    const handleFileUpload = (event) => {
-        const file = event.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const text = e.target.result;
-                const parsed = parseCSV(text);
-                setOriginalData(parsed);
-                setFileUploaded(true);
-            };
-            reader.readAsText(file);
-        }
-    };
-
-    // --- Data preparation for charts ---
-    const sentimentData = useMemo(() => Object.entries(filteredData.reduce((acc, curr) => {
-        acc[curr.Sentiment] = (acc[curr.Sentiment] || 0) + 1;
-        return acc;
-    }, {})).map(([name, value]) => ({ name, value })), [filteredData]);
-
-    const engagementTrendData = useMemo(() => Object.entries(filteredData.reduce((acc, curr) => {
-        if (curr.Date) {
-            const dateString = curr.Date.toISOString().split('T')[0];
-            acc[dateString] = (acc[dateString] || 0) + curr.Engagements;
-        }
-        return acc;
-    }, {})).map(([date, engagements]) => ({ date, engagements })).sort((a, b) => new Date(a.date) - new Date(b.date)), [filteredData]);
-
-    const platformEngagementData = useMemo(() => Object.entries(filteredData.reduce((acc, curr) => {
-        acc[curr.Platform] = (acc[curr.Platform] || 0) + curr.Engagements;
-        return acc;
-    }, {})).map(([name, value]) => ({ name, value })), [filteredData]);
-
-    const mediaTypeData = useMemo(() => Object.entries(filteredData.reduce((acc, curr) => {
-        acc[curr['Media Type']] = (acc[curr['Media Type']] || 0) + 1;
-        return acc;
-    }, {})).map(([name, value]) => ({ name, value })), [filteredData]);
-    
-    const locationEngagementData = useMemo(() => Object.entries(filteredData.reduce((acc, curr) => {
-        acc[curr.Location] = (acc[curr.Location] || 0) + curr.Engagements;
-        return acc;
-    }, {})).sort(([, a], [, b]) => b - a).slice(0, 5).map(([name, value]) => ({ name, value })), [filteredData]);
-
-    // Anomaly Detection Logic
-    useEffect(() => {
-        if (engagementTrendData.length < 7) {
-            setAnomaly(null);
-            return;
-        }
-        const engagements = engagementTrendData.map(d => d.engagements);
-        const mean = engagements.reduce((a, b) => a + b, 0) / engagements.length;
-        const stdDev = Math.sqrt(engagements.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b) / engagements.length);
-        const threshold = 2; // 2 standard deviations from the mean
-
-        let foundAnomaly = null;
-        for (const point of engagementTrendData) {
-            if (Math.abs(point.engagements - mean) > threshold * stdDev) {
-                foundAnomaly = {
-                    ...point,
-                    type: point.engagements > mean ? 'spike' : 'dip',
-                    mean: mean.toFixed(0),
-                };
-                break; // Find first anomaly and stop
-            }
-        }
-        setAnomaly(foundAnomaly);
-
-    }, [engagementTrendData]);
-
-
-   # --- Gemini API Call Function ---
+# --- Gemini API Call Function ---
 def generate_campaign_summary_llm(prompt):
     """
     Calls the Gemini API to generate a campaign summary based on the provided prompt.
@@ -253,350 +51,383 @@ def generate_campaign_summary_llm(prompt):
     except Exception as e:
         st.error(f"An unexpected error occurred during summary generation: {e}")
         return "Error membuat ringkasan: Terjadi kesalahan tak terduga."
-    
-    const generateSingleChartInsight = async (chartKey) => {
-        if (filteredData.length === 0) return;
-        
-        setIsGeneratingChartInsights(prev => ({ ...prev, [chartKey]: true }));
-        setChartInsights(prev => ({ ...prev, [chartKey]: 'Menganalisis...' }));
 
-        const dataMap = {
-            sentiment: sentimentData,
-            trend: engagementTrendData.slice(-10),
-            platform: platformEngagementData,
-            mediaType: mediaTypeData,
-            location: locationEngagementData,
-        };
+# Fungsi untuk memuat dan menerapkan CSS kustom untuk meniru UI/UX React
+def load_css():
+    """Menyuntikkan CSS kustom untuk gaya visual tingkat lanjut."""
+    st.markdown("""
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400..900&display=swap');
 
-        const prompts = {
-            sentiment: `Anda adalah seorang konsultan intelijen media profesional. Berdasarkan data distribusi sentimen berikut: ${JSON.stringify(dataMap.sentiment)}, berikan 3 wawasan (insights) yang tajam dan dapat ditindaklanjuti untuk strategi komunikasi merek. Fokus pada implikasi strategis dari data ini, bukan hanya deskripsi data. Format sebagai daftar bernomor.`,
-            trend: `Anda adalah seorang konsultan intelijen media. Berdasarkan data tren keterlibatan harian berikut: ${JSON.stringify(dataMap.trend)}, berikan 3 wawasan strategis. Analisis puncak, penurunan, dan pola umum. Apa artinya ini bagi ritme kampanye dan alokasi sumber daya? Format sebagai daftar bernomor.`,
-            platform: `Anda adalah seorang konsultan intelijen media. Berdasarkan data keterlibatan per platform berikut: ${JSON.stringify(dataMap.platform)}, berikan 3 wawasan yang dapat ditindaklanjuti. Identifikasi platform 'juara' dan 'peluang'. Sarankan bagaimana mengoptimalkan strategi konten untuk setiap segmen platform. Format sebagai daftar bernomor.`,
-            mediaType: `Anda adalah seorang konsultan intelijen media. Berdasarkan data bauran jenis media berikut: ${JSON.stringify(dataMap.mediaType)}, berikan 3 wawasan strategis. Analisis preferensi audiens berdasarkan format konten. Sarankan peluang dalam diversifikasi atau spesialisasi format. Format sebagai daftar bernomor.`,
-            location: `Anda adalah seorang konsultan intelijen media. Berdasarkan data keterlibatan per lokasi berikut: ${JSON.stringify(dataMap.location)}, berikan 3 wawasan geo-strategis. Identifikasi pasar utama dan pasar yang sedang berkembang. Sarankan bagaimana melokalkan konten atau kampanye untuk hasil yang lebih baik. Format sebagai daftar bernomor.`
-        };
-
-        try {
-            const result = await getAiInsight(prompts[chartKey]);
-            setChartInsights(prev => ({ ...prev, [chartKey]: result }));
-        } catch (e) {
-            setChartInsights(prev => ({ ...prev, [chartKey]: `Gagal menghasilkan wawasan: ${e.message}` }));
-        } finally {
-            setIsGeneratingChartInsights(prev => ({ ...prev, [chartKey]: false }));
-        }
-    };
-
-    const generateAnomalyInsight = async () => {
-        if (!anomaly) return;
-        setIsGeneratingAnomalyInsight(true);
-        setAnomalyInsight('Menganalisis anomali...');
-
-        const anomalyDate = new Date(anomaly.date);
-        const anomalyDataPoints = filteredData.filter(d => d.Date.toISOString().split('T')[0] === anomaly.date);
-        const topHeadlines = anomalyDataPoints
-            .sort((a,b) => b.Engagements - a.Engagements)
-            .slice(0,3)
-            .map(d => d.Headline)
-            .filter(Boolean)
-            .join(', ');
-
-        const prompt = `Anda adalah seorang analis data intelijen media. Terdeteksi anomali keterlibatan yang signifikan pada tanggal ${anomalyDate.toLocaleDateString('id-ID')}.
-        - Jenis Anomali: ${anomaly.type === 'spike' ? 'Lonjakan Tajam' : 'Penurunan Drastis'}
-        - Keterlibatan pada hari itu: ${anomaly.engagements.toLocaleString()}
-        - Rata-rata keterlibatan: ${anomaly.mean.toLocaleString()}
-        - Topik/Judul utama pada hari itu: ${topHeadlines || 'Tidak ada judul spesifik yang tersedia.'}
-        - Platform utama pada hari itu: ${[...new Set(anomalyDataPoints.map(d => d.Platform))].join(', ')}
-
-        Berdasarkan data ini, berikan 3 kemungkinan penyebab anomali ini dan 2 rekomendasi tindakan yang harus diambil (satu untuk memanfaatkan jika lonjakan, satu untuk memperbaiki jika penurunan). Format sebagai daftar bernomor.`;
-        
-        try {
-            const result = await getAiInsight(prompt);
-            setAnomalyInsight(result);
-        } catch (e) {
-            setAnomalyInsight(`Gagal menghasilkan wawasan anomali: ${e.message}`);
-        } finally {
-            setIsGeneratingAnomalyInsight(false);
-        }
-    };
-    
-    const generatePostIdea = async () => {
-        if(filteredData.length === 0) return;
-        setIsGeneratingPost(true);
-        setPostIdea('Menghasilkan ide postingan...');
-
-        const platformPerformance = filteredData.reduce((acc, curr) => {
-            acc[curr.Platform] = (acc[curr.Platform] || 0) + curr.Engagements;
-            return acc;
-        }, {});
-        const bestPlatform = Object.keys(platformPerformance).reduce((a,b) => platformPerformance[a] > platformPerformance[b] ? a : b, '');
-        
-        const topPerformingPosts = filteredData
-            .filter(d => d.Platform === bestPlatform && d.Sentiment !== 'Negative')
-            .sort((a,b) => b.Engagements - a.Engagements)
-            .slice(0, 5);
-
-        const bestMediaType = topPerformingPosts[0]?.['Media Type'] || 'any';
-        const topHeadlines = topPerformingPosts.map(p => p.Headline).filter(Boolean).join('; ');
-
-        const prompt = `Anda adalah seorang ahli strategi media sosial yang kreatif dan berbasis data. Tugas Anda adalah membuat ide postingan baru berdasarkan analisis data.
-        
-        Analisis Kinerja Kami:
-        - Platform Berkinerja Terbaik: ${bestPlatform}
-        - Jenis Media Paling Menarik di Platform Ini: ${bestMediaType}
-        - Judul Berkinerja Tinggi (sebagai inspirasi topik): ${topHeadlines || 'Tidak ada judul spesifik yang tersedia.'}
-        
-        Berdasarkan data ini, buatlah satu contoh postingan untuk platform **${bestPlatform}**. Postingan harus:
-        1. Ditulis dalam Bahasa Indonesia.
-        2. Memiliki nada yang menarik dan sesuai untuk ${bestPlatform}.
-        3. Memberikan saran konsep visual yang jelas (misalnya, "[Saran Visual: Foto close-up produk...]")
-        4. Menyertakan 3-5 tagar yang relevan dan berpotensi tren.
-
-        Format output dengan jelas menggunakan judul: "Platform:", "Konten Postingan:", "Saran Visual:", dan "Tagar:".`;
-
-        try {
-            const result = await getAiInsight(prompt);
-            setPostIdea(result);
-        } catch(e) {
-            setPostIdea(`Gagal menghasilkan ide postingan: ${e.message}`);
-        } finally {
-            setIsGeneratingPost(false);
-        }
-    };
-    
-    const generateCampaignSummary = async () => {
-        setIsGeneratingSummary(true);
-        setCampaignSummary('Membuat ringkasan strategi...');
-        const prompt = `Anda adalah seorang konsultan strategi media senior. Analisis data dan wawasan kampanye berikut secara komprehensif. Berikan ringkasan eksekutif (3-4 kalimat) diikuti oleh 3 rekomendasi strategis utama yang paling berdampak. Jangan hanya menjelaskan data, berikan implikasi dan langkah selanjutnya yang konkret.
-
-        Wawasan yang sudah ada (jika tersedia):
-        - Wawasan Sentimen: ${chartInsights.sentiment || 'Belum dibuat.'}
-        - Wawasan Tren: ${chartInsights.trend || 'Belum dibuat.'}
-        - Wawasan Platform: ${chartInsights.platform || 'Belum dibuat.'}
-
-        Data Mentah Kinerja Kampanye (gunakan ini jika wawasan di atas belum dibuat atau untuk memperdalam analisis):
-        - Distribusi Sentimen: ${JSON.stringify(sentimentData)}
-        - Tren Keterlibatan Harian (10 hari terakhir): ${JSON.stringify(engagementTrendData.slice(-10))}
-        - Keterlibatan per Platform: ${JSON.stringify(platformEngagementData)}
-        - Bauran Jenis Media: ${JSON.stringify(mediaTypeData)}
-        - Keterlibatan berdasarkan 5 Lokasi Teratas: ${JSON.stringify(locationEngagementData)}
-        
-        Fokus pada gambaran besar: Apa cerita utama yang disampaikan oleh data ini? Di mana peluang terbesar kita dan apa risiko utamanya? Format jawaban Anda dengan jelas.`;
-        
-        const summary = await getAiInsight(prompt).catch(e => `Gagal membuat ringkasan: ${e.message}`);
-        setCampaignSummary(summary);
-        setIsGeneratingSummary(false);
-    };
-
-
-    // --- Export to PDF Function ---
-    const exportDashboardToPdf = async () => {
-        setIsLoading(true);
-        setError(null);
-        try {
-          await Promise.all([
-            loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'),
-            loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js')
-          ]);
-          if (!dashboardRef.current) throw new Error("Referensi dasbor tidak ditemukan.");
-          const { jsPDF } = window.jspdf;
-          if (!jsPDF || !window.html2canvas) throw new Error("Library PDF (jsPDF atau html2canvas) tidak dapat dimuat.");
-          const elementsToHide = document.querySelectorAll('.no-print');
-          elementsToHide.forEach(el => el.style.display = 'none');
-          const canvas = await window.html2canvas(dashboardRef.current, { scale: 2, useCORS: true, backgroundColor: '#0f172a' }); // Match bg
-          elementsToHide.forEach(el => el.style.display = '');
-          const imgData = canvas.toDataURL('image/png');
-          const pdf = new jsPDF('p', 'mm', 'a4');
-          const imgWidth = 210;
-          const pageHeight = 297;
-          const imgHeight = canvas.height * imgWidth / canvas.width;
-          let heightLeft = imgHeight;
-          let position = 0;
-          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-          heightLeft -= pageHeight;
-          while (heightLeft >= 0) {
-            position = heightLeft - imgHeight;
-            pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-            heightLeft -= pageHeight;
-          }
-          pdf.save('gemini-dashboard-hybrid.pdf');
-        } catch (err) {
-          console.error("Error saat mengekspor PDF:", err);
-          setError(err.message || "Gagal membuat PDF. Coba lagi.");
-          const elementsToHide = document.querySelectorAll('.no-print');
-          elementsToHide.forEach(el => el.style.display = '');
-        } finally {
-          setIsLoading(false);
-        }
-    };
-    
-    const CustomTooltip = ({ active, payload, label }) => {
-        if (active && payload && payload.length) {
-          return (
-            <div className="p-4 bg-slate-700/80 backdrop-blur-sm border border-slate-600 rounded-lg text-slate-200">
-              <p className="label font-bold text-cyan-400">{`Tanggal: ${new Date(label).toLocaleDateString('id-ID')}`}</p>
-              <p className="intro">{`${payload[0].name} : ${payload[0].value.toLocaleString()}`}</p>
-            </div>
-          );
-        }
-        return null;
-    };
-
-    // --- Styling Classes ---
-    const filterPanelEffect = "bg-slate-800/40 backdrop-blur-lg border border-slate-700";
-    const mainPanelEffect = "bg-slate-800/60 backdrop-blur-xl border border-slate-600";
-    const insightBoxClass = "mt-4 bg-slate-900/70 p-4 rounded-lg border border-slate-700 min-h-[120px] text-slate-300 whitespace-pre-wrap text-sm";
-    
-    const chartList = [
-        { key: 'sentiment', title: 'Analisis Sentimen', icon: PieChartIcon, data: sentimentData, type: 'pie' },
-        { key: 'trend', title: 'Tren Keterlibatan Seiring Waktu', icon: TrendingUp, data: engagementTrendData, type: 'line' },
-        { key: 'platform', title: 'Keterlibatan per Platform', icon: BarChart2, data: platformEngagementData, type: 'bar' },
-        { key: 'mediaType', title: 'Kombinasi Jenis Media', icon: FileText, data: mediaTypeData, type: 'pie2' },
-        { key: 'location', title: '5 Lokasi Teratas', icon: MapPin, data: locationEngagementData, type: 'bar_vertical' }
-    ];
-
-    return (
-        <div ref={dashboardRef} className={`min-h-screen bg-slate-900 bg-[radial-gradient(at_top_left,_var(--tw-gradient-stops))] from-slate-900 via-slate-900 to-black text-gray-300 p-4 md:p-8 font-sans flex flex-col items-center`}>
-            <style>{`
-                @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400..900&display=swap');
-                .font-orbitron {
-                    font-family: 'Orbitron', sans-serif;
-                }
-            `}</style>
+            /* Pengaturan dasar */
+            body {
+                background-color: #0f172a !important;
+            }
+            .stApp {
+                background-image: radial-gradient(at top left, #1e293b, #0f172a, black);
+                color: #cbd5e1;
+            }
             
-            <header className="w-full max-w-7xl mb-8 text-center">
-                <h1 className="text-3xl md:text-5xl font-extrabold font-orbitron">
-                    <span className="bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-indigo-500">
-                        Media Intelligence Dashboard
-                    </span>
-                </h1>
-                 <p className="mt-2 text-slate-400">Didukung oleh AI Gemini</p>
-            </header>
+            /* Header */
+            .main-header {
+                font-family: 'Orbitron', sans-serif;
+                text-align: center;
+                margin-bottom: 2rem;
+            }
+            .main-header h1 {
+                background: -webkit-linear-gradient(45deg, #06B6D4, #6366F1);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                font-size: 2.75rem;
+                font-weight: 900;
+            }
+            .main-header p {
+                color: #94a3b8;
+                font-size: 1.1rem;
+            }
 
-            {!fileUploaded && (
-                <section className={`${filterPanelEffect} p-8 rounded-2xl shadow-2xl shadow-cyan-500/10 mb-12 w-full max-w-xl text-center transition-all duration-300 ease-in-out`}>
-                    <h2 className="text-2xl font-semibold text-cyan-400 mb-6 flex items-center justify-center">
-                        <UploadCloud className="mr-3 text-cyan-400" size={28} /> Unggah File CSV Anda
-                    </h2>
-                    <p className="text-slate-400 mb-6">Pastikan file memiliki kolom 'Date', 'Engagements', 'Sentiment', 'Platform', 'Media Type', 'Location', dan (opsional) 'Headline'.</p>
-                    <input type="file" accept=".csv" onChange={handleFileUpload} ref={fileInputRef} className="hidden" />
-                    <button onClick={() => fileInputRef.current.click()} className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-bold py-3 px-8 rounded-lg shadow-lg shadow-cyan-500/20 transition-all transform hover:scale-105 active:scale-95 duration-200 focus:outline-none focus:ring-4 focus:ring-cyan-300">
-                        Pilih File
-                    </button>
-                    <p className="mt-4 text-sm text-slate-500">{fileInputRef.current?.files[0]?.name || "Tidak ada file yang dipilih"}</p>
-                </section>
-            )}
+            /* Sidebar */
+            [data-testid="stSidebar"] {
+                background-color: rgba(15, 23, 42, 0.6);
+                backdrop-filter: blur(10px);
+                border-right: 1px solid #334155;
+            }
+            [data-testid="stSidebar"] h3 {
+                color: #5eead4;
+                font-weight: 600;
+            }
 
-            {fileUploaded && (
-                <div className="w-full max-w-7xl flex flex-col lg:flex-row gap-8">
-                    <aside className={`${filterPanelEffect} w-full lg:w-1/4 p-6 rounded-2xl shadow-lg shadow-cyan-500/10 h-fit no-print`}>
-                        <h3 className="text-xl font-semibold text-cyan-300 mb-5 flex items-center"><Filter className="mr-2 text-cyan-400" size={24} /> Filter Data</h3>
-                        <div className="space-y-4">
-                            {[
-                                { id: 'platform', label: 'Platform', icon: BarChart2, value: platformFilter, setter: setPlatformFilter, options: uniquePlatforms },
-                                { id: 'sentiment', label: 'Sentiment', icon: Smile, value: sentimentFilter, setter: setSentimentFilter, options: uniqueSentiments },
-                                { id: 'mediaType', label: 'Media Type', icon: FileText, value: mediaTypeFilter, setter: setMediaTypeFilter, options: uniqueMediaTypes },
-                                { id: 'location', label: 'Location', icon: MapPin, value: locationFilter, setter: setLocationFilter, options: uniqueLocations }
-                            ].map(filter => (
-                                <div key={filter.id}>
-                                    <label htmlFor={filter.id} className="block text-sm font-medium text-slate-300 mb-1 flex items-center"><filter.icon className="inline-block mr-2 text-cyan-400" size={16} /> {filter.label}</label>
-                                    <select id={filter.id} value={filter.value} onChange={(e) => filter.setter(e.target.value)} className="block w-full py-2 px-3 border border-slate-600 bg-slate-700 text-slate-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 sm:text-sm">
-                                        {filter.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                    </select>
-                                </div>
-                            ))}
-                             <div>
-                                <label htmlFor="startDate" className="block text-sm font-medium text-slate-300 mb-1 flex items-center"><Calendar className="inline-block mr-2 text-cyan-400" size={16} /> Tanggal Mulai</label>
-                                <input type="date" id="startDate" value={startDateFilter} onChange={(e) => setStartDateFilter(e.target.value)} className="block w-full py-2 px-3 border border-slate-600 bg-slate-700 text-slate-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 sm:text-sm" />
-                            </div>
-                            <div>
-                                <label htmlFor="endDate" className="block text-sm font-medium text-slate-300 mb-1 flex items-center"><Calendar className="inline-block mr-2 text-cyan-400" size={16} /> Tanggal Akhir</label>
-                                <input type="date" id="endDate" value={endDateFilter} onChange={(e) => setEndDateFilter(e.target.value)} className="block w-full py-2 px-3 border border-slate-600 bg-slate-700 text-slate-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 sm:text-sm" />
-                            </div>
-                             <button onClick={exportDashboardToPdf} className="w-full bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-white font-bold py-2 px-4 rounded-lg shadow-lg shadow-teal-500/20 transition-transform transform hover:scale-105 active:scale-95 duration-200 focus:outline-none focus:ring-4 focus:ring-teal-300 flex items-center justify-center mt-6" disabled={isLoading}>
-                                {isLoading ? 'Mengekspor...' : <><Download className="mr-2" size={20} /> Ekspor ke PDF</>}
-                            </button>
-                            {error && <p className="text-red-400 text-sm mt-2 text-center">{error}</p>}
-                        </div>
-                    </aside>
+            /* Container utama dan kartu */
+            .stVerticalBlock > .stHorizontalBlock:nth-child(1) {
+                border: 1px solid #475569;
+                background-color: rgba(30, 41, 59, 0.6);
+                backdrop-filter: blur(15px);
+                border-radius: 1rem;
+                padding: 1.5rem;
+                box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+            }
+            .chart-container, .insight-hub, .anomaly-card {
+                border: 1px solid #475569;
+                background-color: rgba(30, 41, 59, 0.6);
+                backdrop-filter: blur(15px);
+                border-radius: 1rem;
+                padding: 1.5rem;
+                box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+                margin-bottom: 2rem;
+            }
+             .anomaly-card {
+                border: 2px solid #f59e0b;
+                background-color: rgba(245, 158, 11, 0.1);
+             }
 
-                    <main className="w-full lg:w-3/4 space-y-8">
-                        <section className={`${mainPanelEffect} p-6 rounded-2xl shadow-lg shadow-cyan-500/10`}>
-                            <h3 className="text-xl font-semibold text-cyan-300 mb-4 flex items-center"><BrainCircuit className="mr-3 text-cyan-400" size={24} /> Pusat Wawasan AI</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <h4 className='font-semibold text-lg text-slate-200 mb-2 flex items-center'><Zap className='mr-2 text-yellow-400'/> Ringkasan Strategi Kampanye</h4>
-                                    <button onClick={generateCampaignSummary} disabled={isGeneratingSummary} className="bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-400 hover:to-purple-400 text-white font-bold py-2 px-4 rounded-lg shadow-md shadow-indigo-500/20 transition-all transform hover:scale-105 active:scale-95 duration-200 focus:outline-none focus:ring-4 focus:ring-indigo-300 flex items-center justify-center mb-4 disabled:opacity-50 disabled:cursor-not-allowed">
-                                        {isGeneratingSummary ? 'Membuat...' : <><Zap className="mr-2" size={20} /> Buat Ringkasan</>}
-                                    </button>
-                                    <div className={insightBoxClass}>
-                                        {isGeneratingSummary ? <div className="animate-pulse">[Membuat ringkasan...]</div> : campaignSummary || "Klik untuk membuat ringkasan strategis dari semua data."}
-                                    </div>
-                                </div>
-                                <div>
-                                    <h4 className='font-semibold text-lg text-slate-200 mb-2 flex items-center'><Lightbulb className='mr-2 text-yellow-400'/> Generator Ide Konten AI</h4>
-                                    <button onClick={generatePostIdea} disabled={isGeneratingPost} className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-bold py-2 px-4 rounded-lg shadow-md shadow-amber-500/20 transition-all transform hover:scale-105 active:scale-95 duration-200 focus:outline-none focus:ring-4 focus:ring-amber-300 flex items-center justify-center mb-4 disabled:opacity-50 disabled:cursor-not-allowed">
-                                        {isGeneratingPost ? 'Membuat...' : <><Lightbulb className="mr-2" size={20} /> ✨ Buat Ide Postingan</>}
-                                    </button>
-                                    <div className={insightBoxClass}>
-                                        {isGeneratingPost ? <div className="animate-pulse">[Mencari ide terbaik...]</div> : postIdea || "Klik untuk menghasilkan ide postingan berdasarkan data kinerja terbaik Anda."}
-                                    </div>
-                                </div>
-                            </div>
-                        </section>
+            /* Kotak Wawasan AI */
+            .insight-box {
+                background-color: rgba(15, 23, 42, 0.7);
+                border: 1px solid #334155;
+                border-radius: 0.5rem;
+                padding: 1rem;
+                margin-top: 1rem;
+                min-height: 150px;
+                white-space: pre-wrap; /* Mempertahankan format teks dari AI */
+                font-size: 0.9rem;
+            }
+            
+            /* Judul Kartu */
+            .chart-container h3, .insight-hub h3, .anomaly-card h3 {
+                color: #5eead4;
+                margin-bottom: 1rem;
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                font-weight: 600;
+            }
+            
+            /* Tombol */
+            .stButton>button {
+                border-radius: 0.5rem;
+                font-weight: bold;
+                color: white;
+                transition: all 0.2s ease-in-out;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            }
+            /* Tombol default/insight */
+            .stButton>button:not(:hover) {
+                 background-image: linear-gradient(to right, #8b5cf6, #a855f7);
+                 border: 1px solid #a855f7;
+            }
+            .stButton>button:hover {
+                transform: scale(1.05);
+                box-shadow: 0 4px 20px rgba(168, 85, 247, 0.4);
+            }
+            
+        </style>
+    """, unsafe_allow_html=True)
 
-                        {anomaly && (
-                            <section className={`p-6 rounded-2xl shadow-lg border-2 border-amber-500 bg-amber-500/10`}>
-                                <h3 className="text-xl font-semibold text-amber-300 mb-4 flex items-center"><AlertTriangle className="mr-3 text-amber-400" size={24} /> Peringatan Anomali Terdeteksi!</h3>
-                                <p className='text-slate-300 mb-4'>Kami mendeteksi **{anomaly.type === 'spike' ? 'lonjakan' : 'penurunan'}** keterlibatan yang tidak biasa pada **{new Date(anomaly.date).toLocaleDateString('id-ID')}** dengan **{anomaly.engagements.toLocaleString()}** keterlibatan (rata-rata: {anomaly.mean.toLocaleString()}).</p>
-                                <button onClick={generateAnomalyInsight} disabled={isGeneratingAnomalyInsight} className="bg-gradient-to-r from-red-500 to-amber-500 hover:from-red-400 hover:to-amber-400 text-white font-bold py-2 px-4 rounded-lg shadow-md shadow-red-500/20 transition-all transform hover:scale-105 active:scale-95 duration-200 focus:outline-none focus:ring-4 focus:ring-red-300 flex items-center justify-center mb-4 disabled:opacity-50 disabled:cursor-not-allowed">
-                                    {isGeneratingAnomalyInsight ? 'Menganalisis...' : <><BrainCircuit className="mr-2" size={20} /> ✨ Jelaskan Anomali Ini</>}
-                                </button>
-                                {anomalyInsight && (
-                                     <div className={insightBoxClass}>
-                                        {isGeneratingAnomalyInsight ? <div className="animate-pulse">[Menganalisis penyebab...]</div> : anomalyInsight}
-                                    </div>
-                                )}
-                            </section>
-                        )}
+# Fungsi untuk parsing CSV, diadaptasi untuk pandas
+@st.cache_data
+def parse_csv(uploaded_file):
+    """Membaca file CSV yang diunggah ke dalam DataFrame pandas dan membersihkannya."""
+    try:
+        # Menggunakan io.StringIO untuk membaca file di memori
+        string_data = uploaded_file.getvalue().decode("utf-8")
+        df = pd.read_csv(io.StringIO(string_data))
+        
+        # Pembersihan data
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+        df['Engagements'] = pd.to_numeric(df['Engagements'], errors='coerce')
+        df.dropna(subset=['Date', 'Engagements'], inplace=True)
+        df['Engagements'] = df['Engagements'].astype(int)
+        
+        # Memastikan kolom lain ada
+        required_cols = ['Platform', 'Sentiment', 'Media Type', 'Location', 'Headline']
+        for col in required_cols:
+            if col not in df.columns:
+                df[col] = 'N/A' # Isi dengan N/A jika tidak ada
+        df[required_cols] = df[required_cols].fillna('N/A')
 
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                            {chartList.map((chart) => (
-                                <section key={chart.key} className={`${mainPanelEffect} p-6 rounded-2xl shadow-lg shadow-cyan-500/10`}>
-                                    <h3 className="text-xl font-semibold text-cyan-300 mb-4 flex items-center"><chart.icon className="mr-3 text-cyan-400" size={24} /> {chart.title}</h3>
-                                    <div className="h-80">
-                                        <ResponsiveContainer width="100%" height="100%">
-                                        {chart.data.length === 0 ? <div className='flex items-center justify-center h-full text-slate-400'>Tidak ada data untuk ditampilkan.</div> : 
-                                        chart.type === 'pie' || chart.type === 'pie2' ? (
-                                            <PieChart><Pie data={chart.data} cx="50%" cy="50%" outerRadius={100} fill="#8884d8" dataKey="value" labelLine={false} label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}>{chart.data.map((entry, i) => <Cell key={`cell-${i}`} fill={COLORS[i % COLORS.length]} />)}</Pie><Tooltip contentStyle={{ backgroundColor: 'rgba(30, 41, 59, 0.8)', border: '1px solid #475569', borderRadius: '0.5rem' }} /><Legend wrapperStyle={{ color: '#94a3b8' }}/></PieChart>
-                                        ) : chart.type === 'line' ? (
-                                            <LineChart data={chart.data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" stroke="#334155" /><XAxis dataKey="date" tickFormatter={(tick) => new Date(tick).toLocaleDateString('id-ID', {day: '2-digit', month: 'short'})} stroke="#94a3b8" /><YAxis stroke="#94a3b8" /><Tooltip content={<CustomTooltip />} /><Legend wrapperStyle={{ color: '#94a3b8' }}/><Line type="monotone" dataKey="engagements" stroke="#06B6D4" strokeWidth={2} activeDot={{ r: 8, fill: '#06B6D4' }} dot={{ r: 4, fill: '#06B6D4' }} name="Total Keterlibatan" /></LineChart>
-                                        ) : chart.type === 'bar' ? (
-                                            <BarChart data={chart.data} margin={{ top: 5, right: 20, left: 10, bottom: 35 }}><CartesianGrid strokeDasharray="3 3" stroke="#334155" /><XAxis dataKey="name" angle={-45} textAnchor="end" interval={0} stroke="#94a3b8" height={60} /><YAxis stroke="#94a3b8" /><Tooltip contentStyle={{ backgroundColor: 'rgba(30, 41, 59, 0.8)', border: '1px solid #475569', borderRadius: '0.5rem' }} cursor={{fill: 'rgba(100, 116, 139, 0.1)'}}/><Legend wrapperStyle={{ color: '#94a3b8' }}/><Bar dataKey="value" name="Jumlah Keterlibatan" radius={[4, 4, 0, 0]}>{chart.data.map((entry, i) => <Cell key={`cell-${i}`} fill={COLORS[i % COLORS.length]} />)}</Bar></BarChart>
-                                        ) : ( // bar_vertical
-                                            <BarChart data={chart.data} layout="vertical" margin={{ top: 5, right: 20, left: 80, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" stroke="#334155" /><XAxis type="number" stroke="#94a3b8" /><YAxis type="category" dataKey="name" stroke="#94a3b8" width={100} /><Tooltip contentStyle={{ backgroundColor: 'rgba(30, 41, 59, 0.8)', border: '1px solid #475569', borderRadius: '0.5rem' }} cursor={{fill: 'rgba(100, 116, 139, 0.1)'}}/><Legend wrapperStyle={{ color: '#94a3b8' }}/><Bar dataKey="value" name="Jumlah Keterlibatan" radius={[0, 4, 4, 0]}>{chart.data.map((entry, i) => <Cell key={`cell-${i}`} fill={COLORS[i % COLORS.length]} />)}</Bar></BarChart>
-                                        )}
-                                        </ResponsiveContainer>
-                                    </div>
-                                    <div className="mt-4 flex flex-col items-start">
-                                        <button onClick={() => generateSingleChartInsight(chart.key)} disabled={isGeneratingChartInsights[chart.key] || chart.data.length === 0} className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold py-2 px-4 rounded-lg shadow-lg shadow-purple-500/20 transition-all transform hover:scale-105 active:scale-95 duration-200 focus:outline-none focus:ring-4 focus:ring-purple-300 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
-                                            {isGeneratingChartInsights[chart.key] ? 'Menganalisis...' : <><BrainCircuit className="mr-2" size={20} /> ✨ Buat Wawasan AI</>}
-                                        </button>
-                                        {chartInsights[chart.key] && (
-                                            <div className={`${insightBoxClass} w-full`}>
-                                                <h4 className="font-semibold text-cyan-400 mb-2">Insight oleh Gemini AI:</h4>
-                                                {chartInsights[chart.key]}
-                                            </div>
-                                        )}
-                                    </div>
-                                </section>
-                            ))}
-                        </div>
-                    </main>
-                </div>
-            )}
-        </div>
-    );
-}
+        return df
+    except Exception as e:
+        st.error(f"Gagal memproses file CSV. Pastikan formatnya benar. Error: {e}")
+        return None
 
-export default App;
+# --- UI STREAMLIT ---
+load_css()
+api_configured = configure_gemini_api()
+
+# Header Utama
+st.markdown("""
+    <div class="main-header">
+        <h1>Media Intelligence Dashboard</h1>
+        <p>Didukung oleh AI Gemini</p>
+    </div>
+""", unsafe_allow_html=True)
+
+
+# Inisialisasi session state
+if 'data' not in st.session_state:
+    st.session_state.data = None
+if 'chart_insights' not in st.session_state:
+    st.session_state.chart_insights = {}
+if 'campaign_summary' not in st.session_state:
+    st.session_state.campaign_summary = ""
+if 'post_idea' not in st.session_state:
+    st.session_state.post_idea = ""
+if 'anomaly_insight' not in st.session_state:
+    st.session_state.anomaly_insight = ""
+
+
+# Tampilan unggah file
+if st.session_state.data is None:
+    with st.container():
+        col1, col2, col3 = st.columns([1,2,1])
+        with col2:
+            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+            st.markdown("### ☁️ Unggah File CSV Anda")
+            st.write("Pastikan file memiliki kolom 'Date', 'Engagements', 'Sentiment', 'Platform', 'Media Type', 'Location', dan (opsional) 'Headline'.")
+            uploaded_file = st.file_uploader("Pilih file CSV", type="csv")
+            if uploaded_file is not None:
+                st.session_state.data = parse_csv(uploaded_file)
+                st.rerun() # Muat ulang aplikasi setelah data diunggah
+            st.markdown('</div>', unsafe_allow_html=True)
+
+
+# Tampilan Dasbor Utama (setelah file diunggah)
+if st.session_state.data is not None:
+    df = st.session_state.data
+
+    # --- Sidebar Filter ---
+    with st.sidebar:
+        st.markdown("<h3><i class='fas fa-filter'></i> Filter Data</h3>", unsafe_allow_html=True)
+
+        platform = st.selectbox("Platform", ["All"] + list(df['Platform'].unique()), key='platform_filter')
+        sentiment = st.selectbox("Sentiment", ["All"] + list(df['Sentiment'].unique()), key='sentiment_filter')
+        media_type = st.selectbox("Media Type", ["All"] + list(df['Media Type'].unique()), key='media_type_filter')
+        location = st.selectbox("Location", ["All"] + list(df['Location'].unique()), key='location_filter')
+
+        min_date, max_date = df['Date'].min().date(), df['Date'].max().date()
+        start_date = st.date_input("Tanggal Mulai", min_date, min_value=min_date, max_value=max_date, key='start_date_filter')
+        end_date = st.date_input("Tanggal Akhir", max_date, min_value=min_date, max_value=max_date, key='end_date_filter')
+        
+        # Logika reset insight jika filter berubah
+        filter_state = f"{platform}{sentiment}{media_type}{location}{start_date}{end_date}"
+        if 'last_filter_state' not in st.session_state or st.session_state.last_filter_state != filter_state:
+            st.session_state.chart_insights = {}
+            st.session_state.campaign_summary = ""
+            st.session_state.post_idea = ""
+            st.session_state.anomaly_insight = ""
+            st.session_state.last_filter_state = filter_state
+
+
+    # Filter DataFrame
+    filtered_df = df[
+        (df['Date'].dt.date >= start_date) &
+        (df['Date'].dt.date <= end_date)
+    ]
+    if platform != "All":
+        filtered_df = filtered_df[filtered_df['Platform'] == platform]
+    if sentiment != "All":
+        filtered_df = filtered_df[filtered_df['Sentiment'] == sentiment]
+    if media_type != "All":
+        filtered_df = filtered_df[filtered_df['Media Type'] == media_type]
+    if location != "All":
+        filtered_df = filtered_df[filtered_df['Location'] == location]
+
+    # --- Pusat Wawasan AI ---
+    st.markdown('<div class="insight-hub">', unsafe_allow_html=True)
+    st.markdown("<h3>🧠 Pusat Wawasan AI</h3>", unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("<h4>⚡ Ringkasan Strategi Kampanye</h4>", unsafe_allow_html=True)
+        if st.button("Buat Ringkasan", key="summary_btn", use_container_width=True) and api_configured:
+            with st.spinner("Membuat ringkasan strategi..."):
+                prompt = f"""
+                Anda adalah seorang konsultan strategi media senior. Analisis data kampanye berikut secara komprehensif. Berikan ringkasan eksekutif (3-4 kalimat) diikuti oleh 3 rekomendasi strategis utama yang paling berdampak. 
+                Gunakan data berikut:
+                - Data yang difilter (5 baris pertama): {filtered_df.head().to_json()}
+                - Jumlah total sebutan: {len(filtered_df)}
+                - Rata-rata keterlibatan: {filtered_df['Engagements'].mean():.2f}
+                - Distribusi Sentimen: {filtered_df['Sentiment'].value_counts().to_json()}
+                - Keterlibatan per Platform: {filtered_df.groupby('Platform')['Engagements'].sum().to_json()}
+                Fokus pada gambaran besar: Apa cerita utama yang disampaikan oleh data ini? Di mana peluang terbesar dan apa risiko utamanya? Format jawaban Anda dengan jelas.
+                """
+                summary = get_ai_insight(prompt)
+                st.session_state.campaign_summary = summary
+        
+        st.markdown(f'<div class="insight-box">{st.session_state.campaign_summary or "Klik untuk membuat ringkasan strategis dari semua data."}</div>', unsafe_allow_html=True)
+
+    with col2:
+        st.markdown("<h4>💡 Generator Ide Konten AI</h4>", unsafe_allow_html=True)
+        if st.button("✨ Buat Ide Postingan", key="idea_btn", use_container_width=True) and api_configured:
+            with st.spinner("Mencari ide terbaik..."):
+                best_platform = filtered_df.groupby('Platform')['Engagements'].sum().idxmax()
+                top_posts = filtered_df[filtered_df['Platform'] == best_platform].nlargest(5, 'Engagements')
+
+                prompt = f"""
+                Anda adalah seorang ahli strategi media sosial yang kreatif. Berdasarkan data berikut, buatlah satu contoh postingan untuk platform **{best_platform}**.
+                - Platform Berkinerja Terbaik: {best_platform}
+                - Topik Berkinerja Tinggi (dari judul): {', '.join(top_posts['Headline'].tolist())}
+                Postingan harus:
+                1. Ditulis dalam Bahasa Indonesia.
+                2. Memiliki nada yang menarik dan sesuai untuk {best_platform}.
+                3. Memberikan saran konsep visual yang jelas.
+                4. Menyertakan 3-5 tagar yang relevan.
+                Format output dengan jelas: "Platform:", "Konten Postingan:", "Saran Visual:", dan "Tagar:".
+                """
+                idea = get_ai_insight(prompt)
+                st.session_state.post_idea = idea
+        
+        st.markdown(f'<div class="insight-box">{st.session_state.post_idea or "Klik untuk menghasilkan ide postingan berdasarkan data kinerja terbaik Anda."}</div>', unsafe_allow_html=True)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # --- Deteksi Anomali ---
+    engagement_trend = filtered_df.groupby(filtered_df['Date'].dt.date)['Engagements'].sum().reset_index()
+    if len(engagement_trend) > 7:
+        mean = engagement_trend['Engagements'].mean()
+        std = engagement_trend['Engagements'].std()
+        anomaly_threshold = mean + (2 * std)
+        anomalies = engagement_trend[engagement_trend['Engagements'] > anomaly_threshold]
+        
+        if not anomalies.empty:
+            anomaly = anomalies.iloc[0]
+            st.markdown('<div class="anomaly-card">', unsafe_allow_html=True)
+            st.markdown("<h3>⚠️ Peringatan Anomali Terdeteksi!</h3>", unsafe_allow_html=True)
+            st.write(f"Kami mendeteksi lonjakan keterlibatan yang tidak biasa pada **{anomaly['Date']}** dengan **{int(anomaly['Engagements']):,}** keterlibatan (rata-rata: {int(mean):,}).")
+            
+            if st.button("✨ Jelaskan Anomali Ini", key="anomaly_btn") and api_configured:
+                 with st.spinner("Menganalisis penyebab anomali..."):
+                    prompt = f"""
+                    Anda adalah seorang analis data intelijen media. Terdeteksi anomali keterlibatan pada {anomaly['Date']}.
+                    - Keterlibatan pada hari itu: {anomaly['Engagements']}
+                    - Rata-rata keterlibatan: {mean:.2f}
+                    - Judul berita teratas pada hari itu (jika ada): {', '.join(filtered_df[filtered_df['Date'].dt.date == anomaly['Date']].nlargest(3, 'Engagements')['Headline'].tolist())}
+                    Berikan 3 kemungkinan penyebab anomali ini dan 2 rekomendasi tindakan. Format sebagai daftar bernomor.
+                    """
+                    insight = get_ai_insight(prompt)
+                    st.session_state.anomaly_insight = insight
+
+            if st.session_state.anomaly_insight:
+                st.markdown(f'<div class="insight-box">{st.session_state.anomaly_insight}</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+
+    # --- Tampilan Grafik ---
+    chart_cols = st.columns(2)
+    
+    # Daftar grafik untuk ditampilkan
+    charts_to_display = [
+        {"key": "sentiment", "title": "Analisis Sentimen", "col": chart_cols[0]},
+        {"key": "trend", "title": "Tren Keterlibatan Seiring Waktu", "col": chart_cols[1]},
+        {"key": "platform", "title": "Keterlibatan per Platform", "col": chart_cols[0]},
+        {"key": "mediaType", "title": "Kombinasi Jenis Media", "col": chart_cols[1]},
+        {"key": "location", "title": "5 Lokasi Teratas", "col": chart_cols[0]},
+    ]
+    
+    # Fungsi pembuat prompt untuk menghindari pengulangan
+    def get_chart_prompt(key, data_json):
+        prompts = {
+            "sentiment": f"Berdasarkan data distribusi sentimen berikut: {data_json}, berikan 3 wawasan (insights) tajam dan dapat ditindaklanjuti untuk strategi komunikasi merek. Format sebagai daftar bernomor.",
+            "trend": f"Berdasarkan 10 data tren keterlibatan harian terakhir ini: {data_json}, berikan 3 wawasan strategis tentang puncak, penurunan, dan pola umum. Apa artinya ini bagi ritme kampanye? Format sebagai daftar bernomor.",
+            "platform": f"Berdasarkan data keterlibatan per platform ini: {data_json}, berikan 3 wawasan yang dapat ditindaklanjuti. Identifikasi platform 'juara' dan 'peluang'. Format sebagai daftar bernomor.",
+            "mediaType": f"Berdasarkan data bauran jenis media ini: {data_json}, berikan 3 wawasan strategis. Analisis preferensi audiens berdasarkan format konten. Format sebagai daftar bernomor.",
+            "location": f"Berdasarkan data keterlibatan per lokasi ini: {data_json}, berikan 3 wawasan geo-strategis. Identifikasi pasar utama dan pasar yang sedang berkembang. Format sebagai daftar bernomor."
+        }
+        return f"Anda adalah seorang konsultan intelijen media profesional. {prompts.get(key, '')}"
+
+    for chart in charts_to_display:
+        with chart["col"]:
+            st.markdown(f'<div class="chart-container" key="chart-{chart["key"]}">', unsafe_allow_html=True)
+            st.markdown(f'<h3>{chart["title"]}</h3>', unsafe_allow_html=True)
+            
+            fig = None
+            chart_data_for_prompt = None
+
+            if chart["key"] == "sentiment":
+                sentiment_data = filtered_df['Sentiment'].value_counts().reset_index()
+                sentiment_data.columns = ['Sentiment', 'count']
+                fig = px.pie(sentiment_data, names='Sentiment', values='count', color_discrete_sequence=px.colors.qualitative.Pastel)
+                chart_data_for_prompt = sentiment_data.to_json()
+
+            elif chart["key"] == "trend":
+                fig = px.line(engagement_trend, x='Date', y='Engagements', labels={'Date': 'Tanggal', 'Engagements': 'Total Keterlibatan'})
+                fig.update_traces(line=dict(color='#06B6D4', width=3))
+                chart_data_for_prompt = engagement_trend.tail(10).to_json()
+            
+            elif chart["key"] == "platform":
+                platform_data = filtered_df.groupby('Platform')['Engagements'].sum().sort_values(ascending=False).reset_index()
+                fig = px.bar(platform_data, x='Platform', y='Engagements', color='Platform')
+                chart_data_for_prompt = platform_data.to_json()
+
+            elif chart["key"] == "mediaType":
+                media_type_data = filtered_df['Media Type'].value_counts().reset_index()
+                media_type_data.columns = ['Media Type', 'count']
+                fig = px.pie(media_type_data, names='Media Type', values='count', hole=.3)
+                chart_data_for_prompt = media_type_data.to_json()
+
+            elif chart["key"] == "location":
+                location_data = filtered_df.groupby('Location')['Engagements'].sum().nlargest(5).reset_index()
+                fig = px.bar(location_data, y='Location', x='Engagements', orientation='h', color='Location')
+                chart_data_for_prompt = location_data.to_json()
+            
+            if fig:
+                fig.update_layout(
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    font_color='#cbd5e1',
+                    legend_title_text=''
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+                if st.button(f"✨ Buat Wawasan AI", key=f"insight_btn_{chart['key']}") and api_configured:
+                    with st.spinner(f"Menganalisis {chart['title']}..."):
+                        prompt = get_chart_prompt(chart['key'], chart_data_for_prompt)
+                        insight = get_ai_insight(prompt)
+                        st.session_state.chart_insights[chart['key']] = insight
+                
+                insight_text = st.session_state.chart_insights.get(chart['key'], "")
+                if insight_text:
+                    st.markdown(f'<div class="insight-box">{insight_text}</div>', unsafe_allow_html=True)
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+
