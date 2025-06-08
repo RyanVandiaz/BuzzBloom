@@ -5,7 +5,8 @@ import plotly.graph_objects as go
 import google.generativeai as genai
 import io
 import requests
-# from fpdf import FPDF # Tidak lagi diperlukan
+import base64 # Diperlukan untuk mengkodekan gambar ke Base64
+import plotly.io as pio # Diperlukan untuk mengekspor grafik Plotly sebagai gambar
 
 # --- KONFIGURASI HALAMAN & GAYA ---
 # Mengatur konfigurasi halaman. Ini harus menjadi perintah pertama Streamlit.
@@ -58,14 +59,16 @@ def get_ai_insight(prompt):
         st.error(f"Error saat memanggil Gemini API: {e}. Pastikan API Key valid dan terhubung ke internet.")
         return "Gagal membuat wawasan: Terjadi masalah koneksi atau API."
 
-def generate_html_report(campaign_summary, post_idea, anomaly_insight, chart_insights):
+def generate_html_report(campaign_summary, post_idea, anomaly_insight, chart_insights, chart_figures_dict, charts_to_display_info):
     """
-    Membuat laporan HTML dari wawasan yang dihasilkan AI.
+    Membuat laporan HTML dari wawasan dan grafik yang dihasilkan AI.
+    `chart_figures_dict` adalah kamus {chart_key: plotly_figure_object}.
+    `charts_to_display_info` adalah daftar info grafik untuk mendapatkan judul lengkap.
     """
     current_date = pd.Timestamp.now().strftime("%d-%m-%Y %H:%M")
 
     anomaly_section_html = ""
-    if anomaly_insight:
+    if anomaly_insight and anomaly_insight.strip() != "Belum ada wawasan yang dibuat.":
         anomaly_section_html = f"""
         <div class="section">
             <h2>3. Wawasan Anomali</h2>
@@ -73,18 +76,55 @@ def generate_html_report(campaign_summary, post_idea, anomaly_insight, chart_ins
         </div>
         """
     
-    chart_insights_html = ""
-    if chart_insights:
-        for title, insight_text in chart_insights.items():
-            if insight_text and insight_text.strip() != "Belum ada wawasan yang dibuat.": # Hindari menampilkan bagian kosong
-                chart_insights_html += f"""
-                <div class="insight-sub-section">
-                    <h3>{title}</h3>
-                    <div class="insight-box">{insight_text}</div>
-                </div>
-                """
+    chart_figures_html_sections = ""
+    if chart_figures_dict:
+        for chart_info in charts_to_display_info: # Iterate using the info to get keys and titles
+            chart_key = chart_info["key"]
+            chart_title = chart_info["title"]
+            fig = chart_figures_dict.get(chart_key) # Get the figure object from the dictionary
+            insight_text = chart_insights.get(chart_title, "Belum ada wawasan yang dibuat.") # Get insight using full title
+
+            if fig: # Check if a figure exists for this chart
+                try:
+                    # Convert Plotly figure to PNG bytes
+                    # Adjust width, height, and scale for better resolution in the report
+                    img_bytes = pio.to_image(fig, format="png", width=900, height=550, scale=1.5)
+                    img_base64 = base64.b64encode(img_bytes).decode('utf-8')
+                    
+                    chart_figures_html_sections += f"""
+                    <div class="insight-sub-section">
+                        <h3>{chart_title}</h3>
+                        <img src="data:image/png;base64,{img_base64}" alt="{chart_title}" style="max-width: 100%; height: auto; display: block; margin: 10px auto; border: 1px solid #ddd; border-radius: 5px;">
+                        <div class="insight-box">{insight_text}</div>
+                    </div>
+                    """
+                except Exception as e:
+                    chart_figures_html_sections += f"""
+                    <div class="insight-sub-section">
+                        <h3>{chart_title}</h3>
+                        <p>Gagal menyertakan grafik ini (Error: {e}).</p>
+                        <div class="insight-box">{insight_text}</div>
+                    </div>
+                    """
+            else:
+                # If no figure for this specific chart_key, still include insight if available
+                if insight_text.strip() != "Belum ada wawasan yang dibuat.":
+                    chart_figures_html_sections += f"""
+                    <div class="insight-sub-section">
+                        <h3>{chart_title}</h3>
+                        <p>Tidak ada grafik yang tersedia untuk {chart_title}.</p>
+                        <div class="insight-box">{insight_text}</div>
+                    </div>
+                    """
+                else:
+                     chart_figures_html_sections += f"""
+                    <div class="insight-sub-section">
+                        <h3>{chart_title}</h3>
+                        <p>Tidak ada grafik atau wawasan yang tersedia.</p>
+                    </div>
+                    """
     else:
-        chart_insights_html = "<p>Belum ada wawasan grafik yang dibuat.</p>"
+        chart_figures_html_sections = "<p>Belum ada wawasan atau grafik yang dibuat.</p>"
 
 
     html_content = f"""
@@ -119,7 +159,7 @@ def generate_html_report(campaign_summary, post_idea, anomaly_insight, chart_ins
 
         <div class="section">
             <h2>4. Wawasan Grafik</h2>
-            {chart_insights_html}
+            {chart_figures_html_sections}
         </div>
     </body>
     </html>
@@ -292,6 +332,9 @@ if 'post_idea' not in st.session_state:
     st.session_state.post_idea = ""
 if 'anomaly_insight' not in st.session_state:
     st.session_state.anomaly_insight = ""
+# Tambahkan inisialisasi untuk menyimpan objek grafik
+if 'chart_figures' not in st.session_state:
+    st.session_state.chart_figures = {}
 
 
 # Tampilan unggah file
@@ -333,6 +376,7 @@ if st.session_state.data is not None:
             st.session_state.campaign_summary = ""
             st.session_state.post_idea = ""
             st.session_state.anomaly_insight = ""
+            st.session_state.chart_figures = {} # Reset chart figures juga
             st.session_state.last_filter_state = filter_state
 
 
@@ -511,6 +555,9 @@ if st.session_state.data is not None:
                 chart_data_for_prompt = location_data.to_json()
             
             if fig: # Hanya tampilkan grafik jika ada data untuk dibuat
+                # Simpan objek figure ke session state agar bisa diakses untuk unduh laporan
+                st.session_state.chart_figures[chart["key"]] = fig 
+
                 fig.update_layout(
                     paper_bgcolor='rgba(0,0,0,0)',
                     plot_bgcolor='rgba(0,0,0,0)',
@@ -534,6 +581,9 @@ if st.session_state.data is not None:
                     st.markdown(f'<div class="insight-box">{insight_text}</div>', unsafe_allow_html=True)
             else:
                 st.write("Tidak ada data yang tersedia untuk grafik ini dengan filter yang dipilih.")
+                # Pastikan chart_figures[chart["key"]] diatur ke None jika grafik tidak dibuat
+                st.session_state.chart_figures[chart["key"]] = None 
+
                 # Tombol tetap ada meskipun tidak ada grafik, agar pengguna bisa mencoba menghasilkan wawasan
                 if st.button(f"✨ Buat Wawasan AI", key=f"insight_btn_{chart['key']}_no_chart"):
                     st.session_state.chart_insights[chart['key']] = "Tidak ada data yang cukup untuk menghasilkan wawasan."
@@ -543,23 +593,25 @@ if st.session_state.data is not None:
             
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- Bagian Unduh Laporan HTML (Ganti PDF) ---
+    # --- Bagian Unduh Laporan HTML ---
     st.markdown("---")
     st.markdown("<h3>📄 Unduh Laporan Analisis</h3>", unsafe_allow_html=True)
     
-    # Kumpulkan semua wawasan untuk laporan HTML
+    # Kumpulkan semua wawasan dan objek grafik untuk laporan HTML
     chart_insights_for_report = {
         chart_info["title"]: st.session_state.chart_insights.get(chart_info["key"], "")
         for chart_info in charts_to_display
     }
 
     if st.button("Unduh Laporan HTML", key="download_html_btn", type="primary", use_container_width=True):
-        with st.spinner("Membangun laporan HTML..."):
+        with st.spinner("Membangun laporan HTML dengan grafik..."):
             html_data = generate_html_report(
                 st.session_state.campaign_summary,
                 st.session_state.post_idea,
                 st.session_state.anomaly_insight,
-                chart_insights_for_report
+                chart_insights_for_report,
+                st.session_state.chart_figures, # Kirim objek grafik
+                charts_to_display # Kirim informasi grafik untuk judul
             )
             
             if html_data:
@@ -572,5 +624,5 @@ if st.session_state.data is not None:
                 )
                 st.success("Laporan HTML siap diunduh! Buka file ini di browser Anda, lalu gunakan fitur cetak browser untuk menyimpannya sebagai PDF jika diperlukan.")
             else:
-                st.error("Gagal membuat laporan HTML.")
+                st.error("Gagal membuat laporan HTML. Pastikan semua grafik telah dibuat atau ada data.")
 
