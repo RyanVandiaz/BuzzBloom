@@ -403,13 +403,10 @@ if 'chart_figures' not in st.session_state:
 # Flag baru untuk notifikasi berhasil unggah dan analisis
 if 'file_uploaded_and_processed' not in st.session_state:
     st.session_state.file_uploaded_and_processed = False
-# Flag untuk mengontrol visibilitas bagian upload
-if 'show_upload_section' not in st.session_state:
-    st.session_state.show_upload_section = True
 
 
-# Tampilan unggah file (hanya muncul jika data belum diunggah ATAU show_upload_section adalah True)
-if st.session_state.data is None or st.session_state.show_upload_section:
+# Tampilan unggah file (hanya muncul jika data belum diunggah)
+if st.session_state.data is None: # Hapus 'or st.session_state.show_upload_section'
     with st.container():
         col1, col2, col3 = st.columns([1,2,1])
         with col2:
@@ -422,8 +419,8 @@ if st.session_state.data is None or st.session_state.show_upload_section:
                 if st.session_state.data is not None:
                     st.success("File CSV berhasil diunggah!")
                     st.session_state.file_uploaded_and_processed = True # Set flag setelah berhasil unggah dan proses
-                    st.session_state.show_upload_section = False # Sembunyikan bagian upload setelah sukses
-                # Streamlit akan otomatis rerun ketika session_state.data berubah
+                    # st.session_state.show_upload_section = False # Baris ini tidak lagi diperlukan
+                # Streamlit akan otomatis rerun ketika st.session_state.data berubah
             st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -445,8 +442,9 @@ if st.session_state.data is not None:
         st.session_state.anomaly_insight = ""
         st.session_state.chart_figures = {}
         st.session_state.last_filter_state = "" # Reset filter state
-        st.session_state.show_upload_section = True # Tampilkan kembali bagian upload
+        # st.session_state.show_upload_section = True # Baris ini tidak lagi diperlukan
         st.rerun() # Rerun aplikasi untuk menampilkan kembali bagian upload
+
 
     # --- Sidebar Filter ---
     with st.sidebar:
