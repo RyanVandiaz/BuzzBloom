@@ -83,8 +83,11 @@ def generate_html_report(campaign_summary, post_idea, anomaly_insight, chart_ins
             chart_title = chart_info["title"]
             
             fig = chart_figures_dict.get(chart_key) # Get the figure object from the dictionary
-            # PERBAIKAN: Mengambil insight berdasarkan chart_key, bukan chart_title
-            insight_text = chart_insights.get(chart_key, "Belum ada wawasan yang dibuat.") 
+            # PERBAIKAN: Mengambil semua wawasan versi untuk chart_key
+            insights_for_chart = chart_insights.get(chart_key, {}) 
+            insight_text_v1 = insights_for_chart.get("Insight Versi 1", "Belum ada wawasan yang dibuat.")
+            insight_text_v2 = insights_for_chart.get("Insight Versi 2", "Belum ada wawasan yang dibuat.")
+
 
             if fig: # Check if a figure exists for this chart
                 # PERBAIKAN: Buat salinan figur untuk dimodifikasi sebelum ekspor
@@ -106,7 +109,10 @@ def generate_html_report(campaign_summary, post_idea, anomaly_insight, chart_ins
                     <div class="insight-sub-section">
                         <h3>{chart_title}</h3>
                         <img src="data:image/png;base64,{img_base64}" alt="{chart_title}" style="max-width: 100%; height: auto; display: block; margin: 10px auto; border: 1px solid #ddd; border-radius: 5px;">
-                        <div class="insight-box">{insight_text}</div>
+                        <h4>Wawasan AI Versi 1:</h4>
+                        <div class="insight-box">{insight_text_v1}</div>
+                        <h4>Wawasan AI Versi 2:</h4>
+                        <div class="insight-box">{insight_text_v2}</div>
                     </div>
                     """
                 except Exception as e:
@@ -114,17 +120,23 @@ def generate_html_report(campaign_summary, post_idea, anomaly_insight, chart_ins
                     <div class="insight-sub-section">
                         <h3>{chart_title}</h3>
                         <p>Gagal menyertakan grafik ini (Error: {e}).</p>
-                        <div class="insight-box">{insight_text}</div>
+                        <h4>Wawasan AI Versi 1:</h4>
+                        <div class="insight-box">{insight_text_v1}</div>
+                        <h4>Wawasan AI Versi 2:</h4>
+                        <div class="insight-box">{insight_text_v2}</div>
                     </div>
                     """
             else:
                 # If no figure for this specific chart_key, still include insight if available
-                if insight_text.strip() != "Belum ada wawasan yang dibuat.":
+                if insight_text_v1.strip() != "Belum ada wawasan yang dibuat." or insight_text_v2.strip() != "Belum ada wawasan yang dibuat.":
                     chart_figures_html_sections += f"""
                     <div class="insight-sub-section">
                         <h3>{chart_title}</h3>
                         <p>Tidak ada grafik yang tersedia untuk {chart_title}.</p>
-                        <div class="insight-box">{insight_text}</div>
+                        <h4>Wawasan AI Versi 1:</h4>
+                        <div class="insight-box">{insight_text_v1}</div>
+                        <h4>Wawasan AI Versi 2:</h4>
+                        <div class="insight-box">{insight_text_v2}</div>
                     </div>
                     """
                 else:
@@ -354,7 +366,7 @@ st.markdown("""
 if 'data' not in st.session_state:
     st.session_state.data = None
 if 'chart_insights' not in st.session_state:
-    st.session_state.chart_insights = {}
+    st.session_state.chart_insights = {} # Sekarang akan menyimpan dict {"key": {"Versi 1": ..., "Versi 2": ...}}
 if 'campaign_summary' not in st.session_state:
     st.session_state.campaign_summary = ""
 if 'post_idea' not in st.session_state:
@@ -530,20 +542,26 @@ if st.session_state.data is not None:
         {"key": "sentiment", "title": "Analisis Sentimen", "col": chart_cols[0]},
         {"key": "trend", "title": "Tren Keterlibatan Seiring Waktu", "col": chart_cols[1]},
         {"key": "platform", "title": "Keterlibatan per Platform", "col": chart_cols[0]},
-        {"key": "mediaType", "title": "Distribusi Jenis Media", "col": chart_cols[1]}, # Dikembalikan ke sini
+        {"key": "mediaType", "title": "Distribusi Jenis Media", "col": chart_cols[1]}, 
         {"key": "location", "title": "5 Lokasi Teratas", "col": chart_cols[0]},
     ]
     
     # Fungsi pembuat prompt untuk menghindari pengulangan
-    def get_chart_prompt(key, data_json):
-        prompts = {
+    def get_chart_prompt(key, data_json, version_type="Versi 1"):
+        base_prompts = {
             "sentiment": f"Berdasarkan data distribusi sentimen berikut: {data_json}, berikan 3 wawasan (insights) tajam dan dapat ditindaklanjuti untuk strategi komunikasi merek. Format sebagai daftar bernomor.",
             "trend": f"Berdasarkan 10 data tren keterlibatan harian terakhir ini: {data_json}, berikan 3 wawasan strategis tentang puncak, penurunan, dan pola umum. Apa artinya ini bagi ritme kampanye? Format sebagai daftar bernomor.",
             "platform": f"Berdasarkan data keterlibatan per platform ini: {data_json}, berikan 3 wawasan yang dapat ditindaklanjuti. Identifikasi platform 'juara' dan 'peluang'. Format sebagai daftar bernomor.",
-            "mediaType": f"Berdasarkan data distribusi jenis media ini: {data_json}, berikan 3 wawasan strategis. Analisis preferensi audiens berdasarkan format konten. Format sebagai daftar bernomor.", # Prompt untuk media type
+            "mediaType": f"Berdasarkan data distribusi jenis media ini: {data_json}, berikan 3 wawasan strategis. Analisis preferensi audiens berdasarkan format konten. Format sebagai daftar bernomor.",
             "location": f"Berdasarkan data keterlibatan per lokasi ini: {data_json}, berikan 3 wawasan geo-strategis. Identifikasi pasar utama dan pasar yang sedang berkembang. Format sebagai daftar bernomor."
         }
-        return f"Anda adalah seorang konsultan intelijen media profesional. {prompts.get(key, '')}"
+        
+        prompt_modifier = ""
+        if version_type == "Versi 2":
+            prompt_modifier = "Dari perspektif yang berbeda, atau fokus pada peluang tersembunyi/risiko yang diabaikan, berikan 3 wawasan alternatif/pelengkap. Hindari pengulangan ide dari wawasan umum."
+            
+        return f"Anda adalah seorang konsultan intelijen media profesional. {base_prompts.get(key, '')} {prompt_modifier}".strip()
+
 
     for chart in charts_to_display:
         with chart["col"]:
@@ -561,13 +579,12 @@ if st.session_state.data is not None:
                 chart_data_for_prompt = sentiment_data.to_json()
 
             elif chart["key"] == "trend":
-                # Pastikan 'Date' adalah kolom datetime sebelum mengelompokkan
                 engagement_trend_chart = filtered_df.groupby(filtered_df['Date'].dt.date)['Engagements'].sum().reset_index()
-                engagement_trend_chart['Date'] = pd.to_datetime(engagement_trend_chart['Date']) # Pastikan tipe data datetime untuk plotting
+                engagement_trend_chart['Date'] = pd.to_datetime(engagement_trend_chart['Date'])
                 if not engagement_trend_chart.empty:
                     fig = px.line(engagement_trend_chart, x='Date', y='Engagements', labels={'Date': 'Tanggal', 'Engagements': 'Total Keterlibatan'})
                     fig.update_traces(line=dict(color='#06B6D4', width=3))
-                chart_data_for_prompt = engagement_trend_chart.tail(10).to_json() # Ambil 10 data terakhir untuk prompt
+                chart_data_for_prompt = engagement_trend_chart.tail(10).to_json()
                 
             elif chart["key"] == "platform":
                 platform_data = filtered_df.groupby('Platform')['Engagements'].sum().sort_values(ascending=False).reset_index()
@@ -575,17 +592,16 @@ if st.session_state.data is not None:
                     fig = px.bar(platform_data, x='Platform', y='Engagements', color='Platform')
                 chart_data_for_prompt = platform_data.to_json()
 
-            elif chart["key"] == "mediaType": # LOGIKA UNTUK MEDIA TYPE CHART
+            elif chart["key"] == "mediaType":
                 media_type_data = filtered_df['Media Type'].value_counts().reset_index()
                 media_type_data.columns = ['Media Type', 'count']
                 if not media_type_data.empty:
                     fig = px.pie(media_type_data, names='Media Type', values='count', hole=.3,
                                  color_discrete_map={
-                                     'Image': '#6366F1',  # Contoh warna untuk Image
-                                     'Video': '#06B6D4',  # Contoh warna untuk Video
-                                     'Text': '#5EEAD4',   # Contoh warna untuk Text
-                                     'Carousel': '#F59E0B' # Contoh warna untuk Carousel
-                                     # Tambahkan warna lain jika ada jenis media lain
+                                     'Image': '#6366F1',
+                                     'Video': '#06B6D4',
+                                     'Text': '#5EEAD4',
+                                     'Carousel': '#F59E0B'
                                  })
                 chart_data_for_prompt = media_type_data.to_json()
 
@@ -596,7 +612,6 @@ if st.session_state.data is not None:
                 chart_data_for_prompt = location_data.to_json()
             
             if fig: # Hanya tampilkan grafik jika ada data untuk dibuat
-                # Simpan objek figure ke session state agar bisa diakses untuk unduh laporan
                 st.session_state.chart_figures[chart["key"]] = fig 
 
                 fig.update_layout(
@@ -608,51 +623,82 @@ if st.session_state.data is not None:
                 st.plotly_chart(fig, use_container_width=True)
 
                 # Tombol untuk membuat wawasan AI untuk setiap grafik
-                if st.button(f"✨ Buat Wawasan AI", key=f"insight_btn_{chart['key']}"):
-                    with st.spinner(f"Menganalisis {chart['title']}..."):
-                        if chart_data_for_prompt: # Pastikan ada data untuk prompt
-                            prompt = get_chart_prompt(chart['key'], chart_data_for_prompt)
-                            insight = get_ai_insight(prompt)
-                            st.session_state.chart_insights[chart['key']] = insight
+                if st.button(f"✨ Buat Wawasan AI ({chart['title']})", key=f"insight_btn_{chart['key']}"):
+                    with st.spinner(f"Menganalisis {chart['title']} dan membuat wawasan..."):
+                        if chart_data_for_prompt:
+                            prompt_v1 = get_chart_prompt(chart['key'], chart_data_for_prompt, "Versi 1")
+                            insight_v1 = get_ai_insight(prompt_v1)
+                            
+                            prompt_v2 = get_chart_prompt(chart['key'], chart_data_for_prompt, "Versi 2")
+                            insight_v2 = get_ai_insight(prompt_v2)
+                            
+                            st.session_state.chart_insights[chart['key']] = {
+                                "Insight Versi 1": insight_v1,
+                                "Insight Versi 2": insight_v2
+                            }
                         else:
-                            st.session_state.chart_insights[chart['key']] = "Tidak ada data yang cukup untuk menghasilkan wawasan."
+                            st.session_state.chart_insights[chart['key']] = {
+                                "Insight Versi 1": "Tidak ada data yang cukup untuk menghasilkan wawasan.",
+                                "Insight Versi 2": "Tidak ada data yang cukup untuk menghasilkan wawasan."
+                            }
                 
-                insight_text = st.session_state.chart_insights.get(chart['key'], "")
-                if insight_text:
-                    st.markdown(f'<div class="insight-box">{insight_text}</div>', unsafe_allow_html=True)
+                # Selector untuk versi wawasan
+                current_insights = st.session_state.chart_insights.get(chart['key'], {})
+                
+                # Tambahkan teks info di atas tombol pilih versi
+                st.markdown("Pilih versi wawasan AI untuk ditampilkan:", unsafe_allow_html=True)
+                selected_insight_version = st.radio(
+                    "Pilih Versi Wawasan:",
+                    ("Insight Versi 1", "Insight Versi 2"),
+                    key=f"insight_selector_{chart['key']}"
+                )
+                
+                insight_text_to_display = current_insights.get(selected_insight_version, "Klik 'Buat Wawasan AI' untuk menghasilkan wawasan.")
+                
+                st.markdown(f'<div class="insight-box">{insight_text_to_display}</div>', unsafe_allow_html=True)
             else:
                 st.write("Tidak ada data yang tersedia untuk grafik ini dengan filter yang dipilih.")
-                # Pastikan chart_figures[chart["key"]] diatur ke None jika grafik tidak dibuat
                 st.session_state.chart_figures[chart["key"]] = None 
 
-                # Tombol tetap ada meskipun tidak ada grafik, agar pengguna bisa mencoba menghasilkan wawasan
-                if st.button(f"✨ Buat Wawasan AI", key=f"insight_btn_{chart['key']}_no_chart"):
-                    st.session_state.chart_insights[chart['key']] = "Tidak ada data yang cukup untuk menghasilkan wawasan."
-                insight_text = st.session_state.chart_insights.get(chart['key'], "")
-                if insight_text:
-                    st.markdown(f'<div class="insight-box">{insight_text}</div>', unsafe_allow_html=True)
+                if st.button(f"✨ Buat Wawasan AI ({chart['title']})", key=f"insight_btn_{chart['key']}_no_chart"):
+                    st.session_state.chart_insights[chart['key']] = {
+                        "Insight Versi 1": "Tidak ada data yang cukup untuk menghasilkan wawasan.",
+                        "Insight Versi 2": "Tidak ada data yang cukup untuk menghasilkan wawasan."
+                    }
+                
+                # Selector untuk versi wawasan (bahkan jika tidak ada grafik)
+                # Tambahkan teks info di atas tombol pilih versi
+                st.markdown("Pilih versi wawasan AI untuk ditampilkan:", unsafe_allow_html=True)
+                current_insights = st.session_state.chart_insights.get(chart['key'], {})
+                selected_insight_version = st.radio(
+                    "Pilih Versi Wawasan:",
+                    ("Insight Versi 1", "Insight Versi 2"),
+                    key=f"insight_selector_{chart['key']}_no_chart"
+                )
+                insight_text_to_display = current_insights.get(selected_insight_version, "Klik 'Buat Wawasan AI' untuk menghasilkan wawasan.")
+                st.markdown(f'<div class="insight-box">{insight_text_to_display}</div>', unsafe_allow_html=True)
             
             st.markdown('</div>', unsafe_allow_html=True)
 
     # --- Bagian Unduh Laporan HTML ---
     st.markdown("---")
-    st.markdown("<h3>📄 Unduh Laporan Analisis Anda </h3>", unsafe_allow_html=True)
+    st.markdown("<h3>📄 Unduh Laporan Analisis</h3>", unsafe_allow_html=True)
     
-    # Kumpulkan semua wawasan dan objek grafik untuk laporan 
+    # Kumpulkan semua wawasan dan objek grafik untuk laporan HTML
     chart_insights_for_report = {
-        chart_info["key"]: st.session_state.chart_insights.get(chart_info["key"], "") # Menggunakan key sebagai kunci
+        chart_info["key"]: st.session_state.chart_insights.get(chart_info["key"], {}) 
         for chart_info in charts_to_display
     }
 
-    if st.button("Unduh Laporanmu", key="download_html_btn", type="primary", use_container_width=True):
-        with st.spinner("Membangun laporan dengan grafik..."):
+    if st.button("Unduh Laporan HTML", key="download_html_btn", type="primary", use_container_width=True):
+        with st.spinner("Membangun laporan HTML dengan grafik..."):
             html_data = generate_html_report(
                 st.session_state.campaign_summary,
                 st.session_state.post_idea,
                 st.session_state.anomaly_insight,
-                chart_insights_for_report, # Sekarang berisi kunci `chart_info["key"]`
-                st.session_state.chart_figures, # Kirim objek grafik
-                charts_to_display # Kirim informasi grafik untuk judul
+                chart_insights_for_report, 
+                st.session_state.chart_figures,
+                charts_to_display
             )
             
             if html_data:
@@ -663,6 +709,6 @@ if st.session_state.data is not None:
                     mime="text/html",
                     key="actual_download_button_html"
                 )
-                st.success("Laporanmu siap diunduh! Buka file ini di browser Anda, lalu gunakan fitur cetak browser untuk menyimpannya sebagai PDF jika diperlukan.")
+                st.success("Laporan HTML siap diunduh! Buka file ini di browser Anda, lalu gunakan fitur cetak browser untuk menyimpannya sebagai PDF jika diperlukan.")
             else:
-                st.error("Gagal membuat laporan . Pastikan semua grafik telah dibuat atau ada data.")
+                st.error("Gagal membuat laporan HTML. Pastikan semua grafik telah dibuat atau ada data.")
