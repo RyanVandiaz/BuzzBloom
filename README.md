@@ -1,8 +1,6 @@
 # 🧠 Media Intelligence Dashboard media intelligence ryan agency 
 
-![Project Banner](https://user-images.githubusercontent.com/79312534/235315809-5c74e005-950c-4394-918b-03a017b2b635.png)
-
-**Sebuah dasbor interaktif berbasis AI untuk mengubah data mentah media menjadi wawasan strategis yang dapat ditindaklanjuti.**
+**Sebuah dasbor interaktif berbasis AI untuk mengubah data mentah media menjadi wawasan strategis.**
 
 ---
 
