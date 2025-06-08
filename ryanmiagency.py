@@ -523,118 +523,93 @@ if st.session_state.data is not None:
 
 
     # --- Tampilan Grafik ---
-    chart_cols = st.columns(2)
     
-    # Daftar grafik untuk ditampilkan.
-    charts_to_display = [
-        {"key": "sentiment", "title": "Analisis Sentimen", "col": chart_cols[0]},
-        {"key": "trend", "title": "Tren Keterlibatan Seiring Waktu", "col": chart_cols[1]},
-        {"key": "platform", "title": "Keterlibatan per Platform", "col": chart_cols[0]},
-        {"key": "mediaType", "title": "Distribusi Jenis Media", "col": chart_cols[1]}, # Dikembalikan ke sini
-        {"key": "location", "title": "5 Lokasi Teratas", "col": chart_cols[0]},
-    ]
-    
-    # Fungsi pembuat prompt untuk menghindari pengulangan
-    def get_chart_prompt(key, data_json):
-        prompts = {
-            "sentiment": f"Berdasarkan data distribusi sentimen berikut: {data_json}, berikan 3 wawasan (insights) tajam dan dapat ditindaklanjuti untuk strategi komunikasi merek. Format sebagai daftar bernomor.",
-            "trend": f"Berdasarkan 10 data tren keterlibatan harian terakhir ini: {data_json}, berikan 3 wawasan strategis tentang puncak, penurunan, dan pola umum. Apa artinya ini bagi ritme kampanye? Format sebagai daftar bernomor.",
-            "platform": f"Berdasarkan data keterlibatan per platform ini: {data_json}, berikan 3 wawasan yang dapat ditindaklanjuti. Identifikasi platform 'juara' dan 'peluang'. Format sebagai daftar bernomor.",
-            "mediaType": f"Berdasarkan data distribusi jenis media ini: {data_json}, berikan 3 wawasan strategis. Analisis preferensi audiens berdasarkan format konten. Format sebagai daftar bernomor.", # Prompt untuk media type
-            "location": f"Berdasarkan data keterlibatan per lokasi ini: {data_json}, berikan 3 wawasan geo-strategis. Identifikasi pasar utama dan pasar yang sedang berkembang. Format sebagai daftar bernomor."
-        }
-        return f"Anda adalah seorang konsultan intelijen media profesional. {prompts.get(key, '')}"
+# === Bagian Tampilan Grafik dengan Layout Lebih Rapi ===
 
-    for chart in charts_to_display:
-        with chart["col"]:
-            st.markdown(f'<div class="chart-container" key="chart-{chart["key"]}">', unsafe_allow_html=True)
-            st.markdown(f'<h3>{chart["title"]}</h3>', unsafe_allow_html=True)
-            
-            fig = None
-            chart_data_for_prompt = None
+# Loop setiap 2 chart dalam 1 baris (2 kolom)
+for i in range(0, len(charts_to_display), 2):
+    cols = st.columns(2)
+    for j in range(2):
+        if i + j < len(charts_to_display):
+            chart = charts_to_display[i + j]
+            with cols[j]:
+                st.markdown(f'<div class="chart-container" key="chart-{chart["key"]}">', unsafe_allow_html=True)
+                st.markdown(f'<h3>{chart["title"]}</h3>', unsafe_allow_html=True)
 
-            if chart["key"] == "sentiment":
-                sentiment_data = filtered_df['Sentiment'].value_counts().reset_index()
-                sentiment_data.columns = ['Sentiment', 'count']
-                if not sentiment_data.empty:
-                    fig = px.pie(sentiment_data, names='Sentiment', values='count', color_discrete_sequence=px.colors.qualitative.Pastel)
-                chart_data_for_prompt = sentiment_data.to_json()
+                fig = None
+                chart_data_for_prompt = None
 
-            elif chart["key"] == "trend":
-                # Pastikan 'Date' adalah kolom datetime sebelum mengelompokkan
-                engagement_trend_chart = filtered_df.groupby(filtered_df['Date'].dt.date)['Engagements'].sum().reset_index()
-                engagement_trend_chart['Date'] = pd.to_datetime(engagement_trend_chart['Date']) # Pastikan tipe data datetime untuk plotting
-                if not engagement_trend_chart.empty:
-                    fig = px.line(engagement_trend_chart, x='Date', y='Engagements', labels={'Date': 'Tanggal', 'Engagements': 'Total Keterlibatan'})
-                    fig.update_traces(line=dict(color='#06B6D4', width=3))
-                chart_data_for_prompt = engagement_trend_chart.tail(10).to_json() # Ambil 10 data terakhir untuk prompt
-                
-            elif chart["key"] == "platform":
-                platform_data = filtered_df.groupby('Platform')['Engagements'].sum().sort_values(ascending=False).reset_index()
-                if not platform_data.empty:
-                    fig = px.bar(platform_data, x='Platform', y='Engagements', color='Platform')
-                chart_data_for_prompt = platform_data.to_json()
+                # === Pemilihan jenis grafik ===
+                if chart["key"] == "sentiment":
+                    sentiment_data = filtered_df['Sentiment'].value_counts().reset_index()
+                    sentiment_data.columns = ['Sentiment', 'count']
+                    if not sentiment_data.empty:
+                        fig = px.pie(sentiment_data, names='Sentiment', values='count', color_discrete_sequence=px.colors.qualitative.Pastel)
+                    chart_data_for_prompt = sentiment_data.to_json()
 
-            elif chart["key"] == "mediaType": # LOGIKA UNTUK MEDIA TYPE CHART
-                media_type_data = filtered_df['Media Type'].value_counts().reset_index()
-                media_type_data.columns = ['Media Type', 'count']
-                if not media_type_data.empty:
-                    fig = px.pie(media_type_data, names='Media Type', values='count', hole=.3,
-                                 color_discrete_map={
-                                     'Image': '#6366F1',  # Contoh warna untuk Image
-                                     'Video': '#06B6D4',  # Contoh warna untuk Video
-                                     'Text': '#5EEAD4',   # Contoh warna untuk Text
-                                     'Carousel': '#F59E0B' # Contoh warna untuk Carousel
-                                     # Tambahkan warna lain jika ada jenis media lain
-                                 })
-                chart_data_for_prompt = media_type_data.to_json()
+                elif chart["key"] == "trend":
+                    trend_data = filtered_df.groupby(filtered_df['Date'].dt.date)['Engagements'].sum().reset_index()
+                    trend_data['Date'] = pd.to_datetime(trend_data['Date'])
+                    if not trend_data.empty:
+                        fig = px.line(trend_data, x='Date', y='Engagements')
+                        fig.update_traces(line=dict(color='#06B6D4', width=3))
+                    chart_data_for_prompt = trend_data.tail(10).to_json()
 
-            elif chart["key"] == "location": 
-                location_data = filtered_df.groupby('Location')['Engagements'].sum().nlargest(5).reset_index()
-                if not location_data.empty:
-                    fig = px.bar(location_data, y='Location', x='Engagements', orientation='h', color='Location')
-                chart_data_for_prompt = location_data.to_json()
-            
-            if fig: # Hanya tampilkan grafik jika ada data untuk dibuat
-                # Simpan objek figure ke session state agar bisa diakses untuk unduh laporan
-                st.session_state.chart_figures[chart["key"]] = fig 
+                elif chart["key"] == "platform":
+                    platform_data = filtered_df.groupby('Platform')['Engagements'].sum().sort_values(ascending=False).reset_index()
+                    if not platform_data.empty:
+                        fig = px.bar(platform_data, x='Platform', y='Engagements', color='Platform')
+                    chart_data_for_prompt = platform_data.to_json()
 
-                fig.update_layout(
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    font_color='#cbd5e1',
-                    legend_title_text=''
-                )
-                st.plotly_chart(fig, use_container_width=True)
+                elif chart["key"] == "mediaType":
+                    media_data = filtered_df['Media Type'].value_counts().reset_index()
+                    media_data.columns = ['Media Type', 'count']
+                    if not media_data.empty:
+                        fig = px.pie(media_data, names='Media Type', values='count', hole=.3)
+                    chart_data_for_prompt = media_data.to_json()
 
-                # Tombol untuk membuat wawasan AI untuk setiap grafik
-                if st.button(f"✨ Buat Wawasan AI", key=f"insight_btn_{chart['key']}"):
-                    with st.spinner(f"Menganalisis {chart['title']}..."):
-                        if chart_data_for_prompt: # Pastikan ada data untuk prompt
-                            prompt = get_chart_prompt(chart['key'], chart_data_for_prompt)
-                            insight = get_ai_insight(prompt)
-                            st.session_state.chart_insights[chart['key']] = insight
-                        else:
-                            st.session_state.chart_insights[chart['key']] = "Tidak ada data yang cukup untuk menghasilkan wawasan."
-                
-                insight_text = st.session_state.chart_insights.get(chart['key'], "")
-                if insight_text:
-                    st.markdown(f'<div class="insight-box">{insight_text}</div>', unsafe_allow_html=True)
-            else:
-                st.write("Tidak ada data yang tersedia untuk grafik ini dengan filter yang dipilih.")
-                # Pastikan chart_figures[chart["key"]] diatur ke None jika grafik tidak dibuat
-                st.session_state.chart_figures[chart["key"]] = None 
+                elif chart["key"] == "location":
+                    loc_data = filtered_df.groupby('Location')['Engagements'].sum().nlargest(5).reset_index()
+                    if not loc_data.empty:
+                        fig = px.bar(loc_data, y='Location', x='Engagements', orientation='h', color='Location')
+                    chart_data_for_prompt = loc_data.to_json()
 
-                # Tombol tetap ada meskipun tidak ada grafik, agar pengguna bisa mencoba menghasilkan wawasan
-                if st.button(f"✨ Buat Wawasan AI", key=f"insight_btn_{chart['key']}_no_chart"):
-                    st.session_state.chart_insights[chart['key']] = "Tidak ada data yang cukup untuk menghasilkan wawasan."
-                insight_text = st.session_state.chart_insights.get(chart['key'], "")
-                if insight_text:
-                    st.markdown(f'<div class="insight-box">{insight_text}</div>', unsafe_allow_html=True)
-            
-            st.markdown('</div>', unsafe_allow_html=True)
+                # === Tampilkan grafik ===
+                if fig:
+                    st.session_state.chart_figures[chart["key"]] = fig 
+                    fig.update_layout(
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        font_color='#cbd5e1',
+                        legend_title_text='',
+                        height=350,
+                        margin=dict(t=30, b=30, l=10, r=10),
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
 
-    # --- Bagian Unduh Laporan HTML ---
+                    if st.button(f"✨ Buat Wawasan AI", key=f"insight_btn_{chart['key']}"):
+                        with st.spinner(f"Menganalisis {chart['title']}..."):
+                            if chart_data_for_prompt:
+                                prompt = get_chart_prompt(chart['key'], chart_data_for_prompt)
+                                insight = get_ai_insight(prompt)
+                                st.session_state.chart_insights[chart['key']] = insight
+                            else:
+                                st.session_state.chart_insights[chart['key']] = "Tidak ada data yang cukup."
+
+                    insight_text = st.session_state.chart_insights.get(chart['key'], "")
+                    if insight_text:
+                        st.markdown(f'<div class="insight-box">{insight_text}</div>', unsafe_allow_html=True)
+                else:
+                    st.write("Tidak ada data tersedia.")
+                    st.session_state.chart_figures[chart["key"]] = None
+                    if st.button(f"✨ Buat Wawasan AI", key=f"insight_btn_{chart['key']}_no_chart"):
+                        st.session_state.chart_insights[chart['key']] = "Tidak ada data."
+                    insight_text = st.session_state.chart_insights.get(chart['key'], "")
+                    if insight_text:
+                        st.markdown(f'<div class="insight-box">{insight_text}</div>', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+
+# --- Bagian Unduh Laporan HTML ---
     st.markdown("---")
     st.markdown("<h3>📄 Unduh Laporan Analisis</h3>", unsafe_allow_html=True)
     
