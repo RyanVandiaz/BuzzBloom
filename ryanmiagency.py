@@ -218,25 +218,41 @@ function App() {
     }, [engagementTrendData]);
 
 
-    // --- Gemini API Call Helper ---
-    const getAiInsight = async (prompt) => {
-        try {
-            const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
-            const apiKey = "AIzaSyC0VUu6xTFIwH3aP2R7tbhyu4O8m1ICxn4";
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            const result = await response.json();
-            if (result.candidates && result.candidates[0]?.content?.parts?.[0]) {
-                return result.candidates[0].content.parts[0].text;
-            } else {
-                return 'Tidak dapat menghasilkan wawasan dari data yang diberikan.';
-            }
-        } catch (error) {
-            console.error('Error fetching AI insight:', error);
-            throw error;
-        }
-    };
+   # --- Gemini API Call Function ---
+def generate_campaign_summary_llm(prompt):
+    """
+    Calls the Gemini API to generate a campaign summary based on the provided prompt.
+    """
+    # YOUR API KEY IS NOW HARDCODED HERE
+    api_key = "AIzaSyC0VUu6xTFIwH3aP2R7tbhyu4O8m1ICxn4" 
+
+    if not api_key: # Added check for empty API key
+        st.error("API Key tidak ditemukan. Pastikan API Key diatur dengan benar di lingkungan Canvas.")
+        return "Gagal membuat ringkasan: API Key tidak diatur."
+
+    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+
+    chat_history = [{"role": "user", "parts": [{"text": prompt}]}]
+    payload = {"contents": chat_history}
+
+    try:
+        response = requests.post(api_url, headers={'Content-Type': 'application/json'}, json=payload)
+        response.raise_for_status() # Raise an exception for HTTP errors (4xx or 5xx)
+        result = response.json()
+
+        if result.get('candidates') and len(result['candidates']) > 0 and \
+           result['candidates'][0].get('content') and result['candidates'][0]['content'].get('parts') and \
+           len(result['candidates'][0]['content']['parts']) > 0:
+            return result['candidates'][0]['content']['parts'][0]['text']
+        else:
+            st.error("Gemini API response structure unexpected.")
+            return "Gagal membuat ringkasan. Silakan coba lagi."
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error calling Gemini API: {e}. Please ensure you have internet connectivity and a valid API key.")
+        return "Error membuat ringkasan: Terjadi masalah koneksi atau API."
+    except Exception as e:
+        st.error(f"An unexpected error occurred during summary generation: {e}")
+        return "Error membuat ringkasan: Terjadi kesalahan tak terduga."
     
     const generateSingleChartInsight = async (chartKey) => {
         if (filteredData.length === 0) return;
