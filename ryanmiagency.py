@@ -59,11 +59,12 @@ def get_ai_insight(prompt):
         st.error(f"Error saat memanggil Gemini API: {e}. Pastikan API Key valid dan terhubung ke internet.")
         return "Gagal membuat wawasan: Terjadi masalah koneksi atau API."
 
-def generate_html_report(campaign_summary, post_idea, anomaly_insight, chart_insights, chart_figures_dict, charts_to_display_info):
+def generate_html_report(campaign_summary, post_idea, anomaly_insight, chart_insights, chart_figures_dict, charts_to_display_info, media_type_content_html):
     """
     Membuat laporan HTML dari wawasan dan grafik yang dihasilkan AI.
     `chart_figures_dict` adalah kamus {chart_key: plotly_figure_object}.
     `charts_to_display_info` adalah daftar info grafik untuk mendapatkan judul lengkap.
+    `media_type_content_html` adalah konten HTML untuk bagian Jenis Media.
     """
     current_date = pd.Timestamp.now().strftime("%d-%m-%Y %H:%M")
 
@@ -81,6 +82,11 @@ def generate_html_report(campaign_summary, post_idea, anomaly_insight, chart_ins
         for chart_info in charts_to_display_info: # Iterate using the info to get keys and titles
             chart_key = chart_info["key"]
             chart_title = chart_info["title"]
+            
+            # Skip mediaType chart for HTML report as it's now handled by media_type_content_html
+            if chart_key == "mediaType":
+                continue
+
             fig = chart_figures_dict.get(chart_key) # Get the figure object from the dictionary
             insight_text = chart_insights.get(chart_title, "Belum ada wawasan yang dibuat.") # Get insight using full title
 
@@ -161,6 +167,12 @@ def generate_html_report(campaign_summary, post_idea, anomaly_insight, chart_ins
             <h2>4. Wawasan Grafik</h2>
             {chart_figures_html_sections}
         </div>
+        
+        <div class="section">
+            <h2>5. Detail Jenis Media</h2>
+            {media_type_content_html}
+        </div>
+
     </body>
     </html>
     """
@@ -263,12 +275,19 @@ def load_css():
             }
 
             /* Atur margin/padding untuk elemen Streamlit di dalam kotak agar lebih rapi */
-            /* Target langsung elemen <p> yang dihasilkan oleh st.write atau st.markdown biasa */
-            .chart-container p, 
-            .insight-hub p,
-            .anomaly-card p {
-                margin-top: 0; /* Hapus margin atas default */
-                margin-bottom: 0.75rem; /* Beri jarak antar teks */
+            /* Menargetkan teks di dalam div anomali card */
+            .anomaly-card .anomaly-text {
+                margin-top: 0.5rem;
+                margin-bottom: 1rem;
+                padding: 0 0.5rem; /* Sedikit padding horizontal jika perlu */
+            }
+            
+            /* Menargetkan elemen <p> yang dihasilkan oleh st.write atau st.markdown biasa di dalam kontainer */
+            .chart-container .stMarkdown p, 
+            .insight-hub .stMarkdown p,
+            .anomaly-card .stMarkdown p {
+                margin-top: 0.25rem; /* Sesuaikan margin atas */
+                margin-bottom: 0.5rem; /* Sesuaikan margin bawah */
             }
 
             .chart-container > div > div > div > .stFileUploader {
@@ -281,7 +300,26 @@ def load_css():
                 margin-bottom: 0.5rem;
                 margin-top: 1rem; /* Tambahkan sedikit ruang di atas tombol */
             }
-            
+            /* Style for media type detail */
+            .media-type-detail {
+                background-color: rgba(30, 41, 59, 0.6);
+                border-radius: 0.5rem;
+                padding: 1rem;
+                margin-bottom: 1rem;
+                border: 1px solid #334155;
+            }
+            .media-type-detail h4 {
+                color: #5eead4;
+                margin-top: 0;
+                margin-bottom: 0.5rem;
+            }
+            .media-type-detail ul {
+                list-style: none;
+                padding-left: 0;
+            }
+            .media-type-detail li {
+                margin-bottom: 0.3rem;
+            }
         </style>
     """, unsafe_allow_html=True)
 
@@ -471,7 +509,7 @@ if st.session_state.data is not None:
             # Menggunakan st.markdown dengan div untuk memastikan teks berada di dalam kotak
             st.markdown(f"""
                 <div class="anomaly-text">
-                    Kami mendeteksi lonjakan keterlibatan yang tidak biasa pada **{anomaly['Date']}** dengan **{int(anomaly['Engagements']):,}** keterlibatan (rata-rata: {int(mean):,} ± {int(std):,}).
+                    Kami mendeteksi lonjakan keterlibatan yang tidak biasa pada **{anomaly['Date']}** dengan **{int(anomaly['Engagements']):,}** keterlibatan (rata-rata: {int(mean):,} &plusmn; {int(std):,}).
                 </div>
             """, unsafe_allow_html=True)
             
@@ -495,16 +533,16 @@ if st.session_state.data is not None:
             st.markdown('</div>', unsafe_allow_html=True)
 
 
-    # --- Tampilan Grafik ---
+    # --- Tampilan Grafik & Detail Media Type ---
     chart_cols = st.columns(2)
     
-    # Daftar grafik untuk ditampilkan
+    # Daftar grafik untuk ditampilkan. Media Type akan ditangani secara terpisah.
     charts_to_display = [
         {"key": "sentiment", "title": "Analisis Sentimen", "col": chart_cols[0]},
         {"key": "trend", "title": "Tren Keterlibatan Seiring Waktu", "col": chart_cols[1]},
         {"key": "platform", "title": "Keterlibatan per Platform", "col": chart_cols[0]},
-        {"key": "mediaType", "title": "Distribusi Jenis Media", "col": chart_cols[1]},
-        {"key": "location", "title": "5 Lokasi Teratas", "col": chart_cols[0]},
+        # {"key": "mediaType", "title": "Distribusi Jenis Media", "col": chart_cols[1]}, # Dihapus dari daftar ini
+        {"key": "location", "title": "5 Lokasi Teratas", "col": chart_cols[1]}, # Pindahkan ke col 1
     ]
     
     # Fungsi pembuat prompt untuk menghindari pengulangan
@@ -513,10 +551,11 @@ if st.session_state.data is not None:
             "sentiment": f"Berdasarkan data distribusi sentimen berikut: {data_json}, berikan 3 wawasan (insights) tajam dan dapat ditindaklanjuti untuk strategi komunikasi merek. Format sebagai daftar bernomor.",
             "trend": f"Berdasarkan 10 data tren keterlibatan harian terakhir ini: {data_json}, berikan 3 wawasan strategis tentang puncak, penurunan, dan pola umum. Apa artinya ini bagi ritme kampanye? Format sebagai daftar bernomor.",
             "platform": f"Berdasarkan data keterlibatan per platform ini: {data_json}, berikan 3 wawasan yang dapat ditindaklanjuti. Identifikasi platform 'juara' dan 'peluang'. Format sebagai daftar bernomor.",
-            "mediaType": f"Berdasarkan data bauran jenis media ini: {data_json}, berikan 3 wawasan strategis. Analisis preferensi audiens berdasarkan format konten. Format sebagai daftar bernomor.",
             "location": f"Berdasarkan data keterlibatan per lokasi ini: {data_json}, berikan 3 wawasan geo-strategis. Identifikasi pasar utama dan pasar yang sedang berkembang. Format sebagai daftar bernomor."
         }
         return f"Anda adalah seorang konsultan intelijen media profesional. {prompts.get(key, '')}"
+
+    media_type_content_html = "" # Variabel untuk menyimpan HTML bagian jenis media
 
     for chart in charts_to_display:
         with chart["col"]:
@@ -548,14 +587,7 @@ if st.session_state.data is not None:
                     fig = px.bar(platform_data, x='Platform', y='Engagements', color='Platform')
                 chart_data_for_prompt = platform_data.to_json()
 
-            elif chart["key"] == "mediaType":
-                media_type_data = filtered_df['Media Type'].value_counts().reset_index()
-                media_type_data.columns = ['Media Type', 'count']
-                if not media_type_data.empty:
-                    fig = px.pie(media_type_data, names='Media Type', values='count', hole=.3)
-                chart_data_for_prompt = media_type_data.to_json()
-
-            elif chart["key"] == "location":
+            elif chart["key"] == "location": # Ini sekarang chart_cols[1]
                 location_data = filtered_df.groupby('Location')['Engagements'].sum().nlargest(5).reset_index()
                 if not location_data.empty:
                     fig = px.bar(location_data, y='Location', x='Engagements', orientation='h', color='Location')
@@ -600,6 +632,59 @@ if st.session_state.data is not None:
             
             st.markdown('</div>', unsafe_allow_html=True)
 
+    # --- Bagian Jenis Media yang Ditingkatkan (menggantikan grafik pie) ---
+    with chart_cols[0]: # Letakkan bagian ini di kolom yang sama dengan Sentimen
+        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+        st.markdown('<h3>📊 Detail Jenis Media & Konten</h3>', unsafe_allow_html=True)
+        
+        media_types = filtered_df['Media Type'].value_counts().index.tolist()
+        if not media_types:
+            st.write("Tidak ada data jenis media yang tersedia dengan filter yang dipilih.")
+            media_type_content_html = "<p>Tidak ada data jenis media yang tersedia dengan filter yang dipilih.</p>"
+        else:
+            media_type_html_parts = []
+            media_type_data_for_prompt = {} # Untuk prompt AI
+
+            for m_type in media_types:
+                media_type_subset = filtered_df[filtered_df['Media Type'] == m_type]
+                top_headlines = media_type_subset['Headline'].value_counts().nlargest(3).index.tolist()
+                
+                media_type_html_parts.append(f'<div class="media-type-detail"><h4>Jenis: {m_type} (Keterlibatan Total: {media_type_subset["Engagements"].sum():,.0f})</h4>')
+                media_type_data_for_prompt[m_type] = {
+                    "count": len(media_type_subset),
+                    "engagements": media_type_subset["Engagements"].sum(),
+                    "top_headlines": top_headlines
+                }
+
+                if top_headlines:
+                    media_type_html_parts.append('<h5>Contoh Konten:</h5><ul>')
+                    for headline in top_headlines:
+                        media_type_html_parts.append(f'<li>- "{headline}"</li>')
+                    media_type_html_parts.append('</ul>')
+                else:
+                    media_type_html_parts.append('<p>Tidak ada contoh konten (Headline) tersedia untuk jenis ini.</p>')
+                media_type_html_parts.append('</div>')
+            
+            st.markdown("".join(media_type_html_parts), unsafe_allow_html=True)
+            media_type_content_html = "".join(media_type_html_parts) # Simpan untuk laporan HTML
+
+            st.write("Untuk media aktual (gambar/video), pastikan data CSV Anda memiliki kolom URL media.")
+            st.write("Anda bisa mengintegrasikannya menggunakan `st.image(url)` atau `st.video(url)` jika URL tersedia.")
+
+            # Tombol untuk membuat wawasan AI untuk Jenis Media
+            if st.button(f"✨ Buat Wawasan AI untuk Jenis Media", key=f"insight_btn_mediaType"):
+                with st.spinner(f"Menganalisis Jenis Media..."):
+                    prompt = f"Anda adalah seorang konsultan intelijen media profesional. Berdasarkan data jenis media berikut: {media_type_data_for_prompt}, berikan 3 wawasan strategis. Analisis preferensi audiens berdasarkan format konten yang paling banyak menghasilkan keterlibatan atau sebutan. Format sebagai daftar bernomor."
+                    insight = get_ai_insight(prompt)
+                    st.session_state.chart_insights["Distribusi Jenis Media"] = insight # Simpan dengan judul penuh
+            
+            insight_text_media_type = st.session_state.chart_insights.get("Distribusi Jenis Media", "")
+            if insight_text_media_type:
+                st.markdown(f'<div class="insight-box">{insight_text_media_type}</div>', unsafe_allow_html=True)
+
+        st.markdown('</div>', unsafe_allow_html=True) # Tutup chart-container untuk media type
+
+
     # --- Bagian Unduh Laporan HTML ---
     st.markdown("---")
     st.markdown("<h3>📄 Unduh Laporan Analisis</h3>", unsafe_allow_html=True)
@@ -607,8 +692,12 @@ if st.session_state.data is not None:
     # Kumpulkan semua wawasan dan objek grafik untuk laporan HTML
     chart_insights_for_report = {
         chart_info["title"]: st.session_state.chart_insights.get(chart_info["key"], "")
-        for chart_info in charts_to_display
+        for chart_info in charts_to_display if chart_info["key"] != "mediaType"
     }
+    # Tambahkan wawasan media type secara eksplisit karena kunci disimpan dengan judul penuh
+    if "Distribusi Jenis Media" in st.session_state.chart_insights:
+        chart_insights_for_report["Distribusi Jenis Media"] = st.session_state.chart_insights["Distribusi Jenis Media"]
+
 
     if st.button("Unduh Laporan HTML", key="download_html_btn", type="primary", use_container_width=True):
         with st.spinner("Membangun laporan HTML dengan grafik..."):
@@ -618,7 +707,8 @@ if st.session_state.data is not None:
                 st.session_state.anomaly_insight,
                 chart_insights_for_report,
                 st.session_state.chart_figures, # Kirim objek grafik
-                charts_to_display # Kirim informasi grafik untuk judul
+                charts_to_display, # Kirim informasi grafik untuk judul
+                media_type_content_html # Kirim konten HTML untuk bagian jenis media
             )
             
             if html_data:
