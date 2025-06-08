@@ -340,6 +340,28 @@ def load_css():
             div[data-testid="stRadio"] label {
                 margin-bottom: 0.5rem; /* Beri jarak antar opsi radio */
             }
+
+            /* Gaya untuk menampilkan info file terunggah */
+            .uploaded-file-info {
+                background-color: rgba(30, 41, 59, 0.6);
+                border: 1px solid #475569;
+                border-radius: 1rem;
+                padding: 1.5rem;
+                margin-bottom: 2rem;
+                box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+                color: #cbd5e1;
+            }
+            .uploaded-file-info h3 {
+                color: #5eead4;
+                margin-top: 0;
+                margin-bottom: 1rem;
+            }
+            .uploaded-file-info p {
+                margin-bottom: 0.5rem;
+            }
+            .uploaded-file-info .stButton {
+                margin-top: 1.5rem;
+            }
         </style>
     """, unsafe_allow_html=True)
 
@@ -397,12 +419,12 @@ if 'post_idea' not in st.session_state:
     st.session_state.post_idea = ""
 if 'anomaly_insight' not in st.session_state:
     st.session_state.anomaly_insight = ""
-# Tambahkan inisialisasi untuk menyimpan objek grafik
 if 'chart_figures' not in st.session_state:
     st.session_state.chart_figures = {}
-# Flag baru untuk notifikasi berhasil unggah dan analisis
-if 'file_uploaded_and_processed' not in st.session_state:
-    st.session_state.file_uploaded_and_processed = False
+if 'last_uploaded_file_name' not in st.session_state: # Tambahkan inisialisasi untuk nama file
+    st.session_state.last_uploaded_file_name = None
+if 'last_uploaded_file_size' not in st.session_state: # Tambahkan inisialisasi untuk ukuran file
+    st.session_state.last_uploaded_file_size = None
 
 
 # Tampilan unggah file (hanya muncul jika data belum diunggah)
@@ -412,14 +434,20 @@ if st.session_state.data is None:
         with col2:
             st.markdown('<div class="chart-container">', unsafe_allow_html=True)
             st.markdown("### ☁️ Unggah File CSV Anda")
-            st.write("Pastikan file memiliki kolom 'Date', 'Engagements', 'Sentiment', 'Platform', 'Media_Type', 'Location', dan (opsional) 'Headline'.") # Mengubah deskripsi di sini juga
+            st.write("Pastikan file memiliki kolom 'Date', 'Engagements', 'Sentiment', 'Platform', 'Media_Type', 'Location', dan (opsional) 'Headline'.")
             uploaded_file = st.file_uploader("Pilih file CSV", type="csv", key="main_file_uploader")
             if uploaded_file is not None:
-                st.session_state.data = parse_csv(uploaded_file)
-                if st.session_state.data is not None:
-                    st.success("File CSV berhasil diunggah!")
-                    st.session_state.file_uploaded_and_processed = True # Set flag setelah berhasil unggah dan proses
-                    st.rerun() # PERBAIKAN: Tambahkan rerun() untuk memaksa update UI segera
+                # Periksa apakah file yang diunggah sama dengan yang terakhir kali diproses
+                if uploaded_file.name != st.session_state.last_uploaded_file_name:
+                    st.session_state.data = parse_csv(uploaded_file)
+                    if st.session_state.data is not None:
+                        # Simpan detail file
+                        st.session_state.last_uploaded_file_name = uploaded_file.name
+                        st.session_state.last_uploaded_file_size = uploaded_file.size
+                        # Tidak perlu st.success() di sini, akan ditampilkan di bagian info file.
+                        # Tidak perlu st.rerun() di sini, Streamlit akan otomatis re-render.
+                # else:
+                #     st.info("File ini sudah diunggah dan dianalisis.") # Opsional: pesan jika file yang sama diunggah ulang
             st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -427,12 +455,15 @@ if st.session_state.data is None:
 if st.session_state.data is not None:
     df = st.session_state.data
 
-    # Tampilkan notifikasi "Berikut adalah hasil analisis datamu." hanya sekali
-    if st.session_state.file_uploaded_and_processed:
-        st.info("Berikut adalah hasil analisis datamu.")
-        st.session_state.file_uploaded_and_processed = False # Reset flag agar tidak muncul lagi setelah refresh atau interaksi
-
-    # Tombol untuk menghapus file dan menampilkan kembali bagian upload
+    # Menampilkan informasi file yang terunggah dan tombol hapus
+    st.markdown(f"""
+        <div class="uploaded-file-info">
+            <h3>☁️ File Terunggah</h3>
+            <p><strong>Nama File:</strong> {st.session_state.last_uploaded_file_name}</p>
+            <p><strong>Ukuran File:</strong> {st.session_state.last_uploaded_file_size / (1024 * 1024):.2f} MB</p>
+            <p style="color: #5eead4; font-weight: bold;">File CSV berhasil diunggah dan diproses!</p>
+    """, unsafe_allow_html=True)
+    
     if st.button("Hapus File Terunggah", key="clear_file_btn"):
         st.session_state.data = None # Hapus data
         st.session_state.chart_insights = {} # Bersihkan wawasan
@@ -441,8 +472,14 @@ if st.session_state.data is not None:
         st.session_state.anomaly_insight = ""
         st.session_state.chart_figures = {}
         st.session_state.last_filter_state = "" # Reset filter state
-        st.session_state.file_uploaded_and_processed = False # Reset ini juga untuk unggahan berikutnya
+        st.session_state.last_uploaded_file_name = None # Hapus info file
+        st.session_state.last_uploaded_file_size = None # Hapus info file
         st.rerun() # Rerun aplikasi untuk menampilkan kembali bagian upload
+    st.markdown('</div>', unsafe_allow_html=True) # Tutup div uploaded-file-info
+
+
+    # Notifikasi "Berikut adalah hasil analisis datamu."
+    st.info("Berikut adalah hasil analisis datamu.")
 
 
     # --- Sidebar Filter ---
@@ -467,8 +504,6 @@ if st.session_state.data is not None:
             st.session_state.anomaly_insight = ""
             st.session_state.chart_figures = {} # Reset chart figures juga
             st.session_state.last_filter_state = filter_state
-            # Jika filter berubah, pastikan notifikasi awal tidak muncul lagi
-            st.session_state.file_uploaded_and_processed = False
 
 
     # Filter DataFrame
