@@ -83,7 +83,7 @@ def generate_html_report(campaign_summary, post_idea, anomaly_insight, chart_ins
             chart_title = chart_info["title"]
             
             fig = chart_figures_dict.get(chart_key) # Get the figure object from the dictionary
-            insight_text = chart_insights.get(chart_title, "Belum ada wawasan yang dibuat.") # Get insight using full title
+            insight_text = chart_insights.get(chart_key, "Belum ada wawasan yang dibuat.") # Get insight using chart key (not full title for simplicity in report)
 
             if fig: # Check if a figure exists for this chart
                 try:
@@ -139,7 +139,7 @@ def generate_html_report(campaign_summary, post_idea, anomaly_insight, chart_ins
             h1, h2, h3, h4 {{ color: #2c3e50; margin-top: 1.5em; margin-bottom: 0.5em; }}
             .section {{ background-color: #fff; padding: 15px; margin-bottom: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
             .insight-sub-section {{ margin-top: 1em; padding-left: 15px; border-left: 3px solid #eee; }}
-            .insight-box {{ background-color: #e9ecef; padding: 10px; border-radius: 5px; font-size: 0.9em; white-space: pre-wrap; }}
+            .insight-box {{ background-color: #e9ecef; padding: 10px; border-radius: 5px; font-size: 0.9em; white-space: pre-wrap; word-wrap: break-word; }} /* Added word-wrap */
         </style>
     </head>
     <body>
@@ -249,6 +249,8 @@ def load_css():
                 margin-top: 1rem;
                 min-height: 150px;
                 white-space: pre-wrap; /* Mempertahankan format teks dari AI */
+                word-wrap: break-word; /* Ditambahkan: Memastikan teks panjang membungkus */
+                overflow-wrap: break-word; /* Ditambahkan: Memastikan teks sangat panjang membungkus */
                 font-size: 0.9rem;
             }
             
@@ -278,6 +280,8 @@ def load_css():
             .anomaly-card .stMarkdown p {
                 margin-top: 0.25rem; /* Sesuaikan margin atas */
                 margin-bottom: 0.5rem; /* Sesuaikan margin bawah */
+                word-wrap: break-word; /* Ditambahkan: Memastikan teks panjang membungkus */
+                overflow-wrap: break-word; /* Ditambahkan: Memastikan teks sangat panjang membungkus */
             }
 
             .chart-container > div > div > div > .stFileUploader {
@@ -290,8 +294,6 @@ def load_css():
                 margin-bottom: 0.5rem;
                 margin-top: 1rem; /* Tambahkan sedikit ruang di atas tombol */
             }
-            /* Style for media type detail - removed as the chart is back */
-            /* .media-type-detail, .media-type-detail h4, .media-type-detail ul, .media-type-detail li {} */
         </style>
     """, unsafe_allow_html=True)
 
@@ -301,6 +303,11 @@ def parse_csv(uploaded_file):
     try:
         string_data = uploaded_file.getvalue().decode("utf-8")
         df = pd.read_csv(io.StringIO(string_data))
+        
+        # --- PERBAIKAN: Mengganti nama kolom 'Media_Type' menjadi 'Media Type' ---
+        if 'Media_Type' in df.columns:
+            df.rename(columns={'Media_Type': 'Media Type'}, inplace=True)
+        # ----------------------------------------------------------------------
         
         # Pembersihan data
         df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
@@ -356,7 +363,7 @@ if st.session_state.data is None:
         with col2:
             st.markdown('<div class="chart-container">', unsafe_allow_html=True)
             st.markdown("### ☁️ Unggah File CSV Anda")
-            st.write("Pastikan file memiliki kolom 'Date', 'Engagements', 'Sentiment', 'Platform', 'Media Type', 'Location', dan (opsional) 'Headline'.")
+            st.write("Pastikan file memiliki kolom 'Date', 'Engagements', 'Sentiment', 'Platform', 'Media_Type', 'Location', dan (opsional) 'Headline'.") # Mengubah deskripsi di sini juga
             uploaded_file = st.file_uploader("Pilih file CSV", type="csv")
             if uploaded_file is not None:
                 st.session_state.data = parse_csv(uploaded_file)
@@ -508,7 +515,7 @@ if st.session_state.data is not None:
     # --- Tampilan Grafik ---
     chart_cols = st.columns(2)
     
-    # Daftar grafik untuk ditampilkan. Media Type DIKEMBALIKAN.
+    # Daftar grafik untuk ditampilkan.
     charts_to_display = [
         {"key": "sentiment", "title": "Analisis Sentimen", "col": chart_cols[0]},
         {"key": "trend", "title": "Tren Keterlibatan Seiring Waktu", "col": chart_cols[1]},
@@ -629,8 +636,6 @@ if st.session_state.data is not None:
 
     if st.button("Unduh Laporan HTML", key="download_html_btn", type="primary", use_container_width=True):
         with st.spinner("Membangun laporan HTML dengan grafik..."):
-            # generate_html_report tidak lagi memerlukan media_type_content_html secara terpisah
-            # karena mediaType sekarang ditangani sebagai grafik standar
             html_data = generate_html_report(
                 st.session_state.campaign_summary,
                 st.session_state.post_idea,
@@ -651,4 +656,3 @@ if st.session_state.data is not None:
                 st.success("Laporan HTML siap diunduh! Buka file ini di browser Anda, lalu gunakan fitur cetak browser untuk menyimpannya sebagai PDF jika diperlukan.")
             else:
                 st.error("Gagal membuat laporan HTML. Pastikan semua grafik telah dibuat atau ada data.")
-
