@@ -85,7 +85,7 @@ def generate_html_report(campaign_summary, post_idea, anomaly_insight, chart_ins
             fig = chart_figures_dict.get(chart_key) # Get the figure object from the dictionary
             # Mengambil semua wawasan versi untuk chart_key
             insights_for_chart = chart_insights.get(chart_key, {}) 
-            insight_text_v1 = insights_for_chart.get("Insight Versi 1", "Belum ada wawasan yang dibuat.")
+            insight_text_v1 = insights_for_chart.get("gemini-2.0-flash", "Belum ada wawasan yang dibuat.")
             insight_text_v2 = insights_for_chart.get("llama-3.3-8b-instruct", "Belum ada wawasan yang dibuat.")
 
 
@@ -403,7 +403,7 @@ api_configured = configure_gemini_api() # Panggil fungsi konfigurasi API di awal
 st.markdown("""
     <div class="main-header">
         <h1>Media Intelligence Dashboard</h1>
-        <p>Didukung oleh AI Gemini</p>
+        <p>Ryan Vandiaz Media Agency</p>
     </div>
 """, unsafe_allow_html=True)
 
@@ -706,7 +706,7 @@ if st.session_state.data is not None:
                 st.plotly_chart(fig, use_container_width=True)
 
                 # Tombol untuk membuat wawasan AI untuk setiap grafik
-                if st.button(f"✨ Buat Wawasan AI ({chart['title']})", key=f"insight_btn_{chart['key']}"):
+                if st.button(f"✨ Generate AI Insight  ({chart['title']})", key=f"insight_btn_{chart['key']}"):
                     with st.spinner(f"Menganalisis {chart['title']} dan membuat wawasan..."):
                         if chart_data_for_prompt:
                             prompt_v1 = get_chart_prompt(chart['key'], chart_data_for_prompt, "Versi 1")
@@ -716,12 +716,12 @@ if st.session_state.data is not None:
                             insight_v2 = get_ai_insight(prompt_v2)
                             
                             st.session_state.chart_insights[chart['key']] = {
-                                "Insight Versi 1": insight_v1,
+                                "gemini-2.0-flash": insight_v1,
                                 "llama-3.3-8b-instruct": insight_v2
                             }
                         else:
                             st.session_state.chart_insights[chart['key']] = {
-                                "Insight Versi 1": "Tidak ada data yang cukup untuk menghasilkan wawasan.",
+                                "gemini-2.0-flash": "Tidak ada data yang cukup untuk menghasilkan wawasan.",
                                 "llama-3.3-8b-instruct": "Tidak ada data yang cukup untuk menghasilkan wawasan."
                             }
                 
@@ -729,10 +729,10 @@ if st.session_state.data is not None:
                 current_insights = st.session_state.chart_insights.get(chart['key'], {})
                 
                 # Tambahkan teks info di atas tombol pilih versi
-                st.markdown("Pilih versi wawasan AI untuk ditampilkan:", unsafe_allow_html=True)
+                st.markdown("Pilih Model Ai  AI untuk ditampilkan:", unsafe_allow_html=True)
                 selected_insight_version = st.radio(
-                    "Pilih Versi Wawasan:",
-                    ("Insight Versi 1", "llama-3.3-8b-instruct"),
+                    "Pilih Model Ai :",
+                    ("gemini-2.0-flash", "llama-3.3-8b-instruct"),
                     key=f"insight_selector_{chart['key']}"
                 )
                 
@@ -743,19 +743,19 @@ if st.session_state.data is not None:
                 st.write("Tidak ada data yang tersedia untuk grafik ini dengan filter yang dipilih.")
                 st.session_state.chart_figures[chart["key"]] = None 
 
-                if st.button(f"✨ Buat Wawasan AI ({chart['title']})", key=f"insight_btn_{chart['key']}_no_chart"):
+                if st.button(f"✨ Generate AI Insight  ({chart['title']})", key=f"insight_btn_{chart['key']}_no_chart"):
                     st.session_state.chart_insights[chart['key']] = {
-                        "Insight Versi 1": "Tidak ada data yang cukup untuk menghasilkan wawasan.",
+                        "gemini-2.0-flash": "Tidak ada data yang cukup untuk menghasilkan wawasan.",
                         "llama-3.3-8b-instruct": "Tidak ada data yang cukup untuk menghasilkan wawasan."
                     }
                 
                 # Selector untuk versi wawasan (bahkan jika tidak ada grafik)
                 # Tambahkan teks info di atas tombol pilih versi
-                st.markdown("Pilih versi wawasan AI untuk ditampilkan:", unsafe_allow_html=True)
+                st.markdown("Pilih Model Ai  AI untuk ditampilkan:", unsafe_allow_html=True)
                 current_insights = st.session_state.chart_insights.get(chart['key'], {})
                 selected_insight_version = st.radio(
-                    "Pilih Versi Wawasan:",
-                    ("Insight Versi 1", "llama-3.3-8b-instruct"),
+                    "Pilih Model Ai :",
+                    ("gemini-2.0-flash", "llama-3.3-8b-instruct"),
                     key=f"insight_selector_{chart['key']}_no_chart"
                 )
                 insight_text_to_display = current_insights.get(selected_insight_version, "Klik 'Buat Wawasan AI' untuk menghasilkan wawasan.")
