@@ -1,5 +1,4 @@
-**#media intelligence ryan agency **
-# 🧠 Media Intelligence Dashboard
+# 🧠 Media Intelligence Dashboard media intelligence ryan agency 
 
 ![Project Banner](https://user-images.githubusercontent.com/79312534/235315809-5c74e005-950c-4394-918b-03a017b2b635.png)
 
@@ -57,3 +56,4 @@ Proyek ini dibangun menggunakan serangkaian alat dan pustaka modern:
 | **Deployment** | ☁️ [Streamlit Community Cloud](https://streamlit.io/cloud)                                                                                                            |
 ---
 
+Link: -Streamlit App: https://ryanvandiazagency.streamlit.app/
