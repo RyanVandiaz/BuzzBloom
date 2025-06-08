@@ -86,7 +86,7 @@ def generate_html_report(campaign_summary, post_idea, anomaly_insight, chart_ins
             # Mengambil semua wawasan versi untuk chart_key
             insights_for_chart = chart_insights.get(chart_key, {}) 
             insight_text_v1 = insights_for_chart.get("Insight Versi 1", "Belum ada wawasan yang dibuat.")
-            insight_text_v2 = insights_for_chart.get("Insight Versi 2", "Belum ada wawasan yang dibuat.")
+            insight_text_v2 = insights_for_chart.get("llama-3.3-8b-instruct", "Belum ada wawasan yang dibuat.")
 
 
             if fig: # Check if a figure exists for this chart
@@ -717,12 +717,12 @@ if st.session_state.data is not None:
                             
                             st.session_state.chart_insights[chart['key']] = {
                                 "Insight Versi 1": insight_v1,
-                                "Insight Versi 2": insight_v2
+                                "llama-3.3-8b-instruct": insight_v2
                             }
                         else:
                             st.session_state.chart_insights[chart['key']] = {
                                 "Insight Versi 1": "Tidak ada data yang cukup untuk menghasilkan wawasan.",
-                                "Insight Versi 2": "Tidak ada data yang cukup untuk menghasilkan wawasan."
+                                "llama-3.3-8b-instruct": "Tidak ada data yang cukup untuk menghasilkan wawasan."
                             }
                 
                 # Selector untuk versi wawasan
@@ -732,7 +732,7 @@ if st.session_state.data is not None:
                 st.markdown("Pilih versi wawasan AI untuk ditampilkan:", unsafe_allow_html=True)
                 selected_insight_version = st.radio(
                     "Pilih Versi Wawasan:",
-                    ("Insight Versi 1", "Insight Versi 2"),
+                    ("Insight Versi 1", "llama-3.3-8b-instruct"),
                     key=f"insight_selector_{chart['key']}"
                 )
                 
@@ -746,7 +746,7 @@ if st.session_state.data is not None:
                 if st.button(f"✨ Buat Wawasan AI ({chart['title']})", key=f"insight_btn_{chart['key']}_no_chart"):
                     st.session_state.chart_insights[chart['key']] = {
                         "Insight Versi 1": "Tidak ada data yang cukup untuk menghasilkan wawasan.",
-                        "Insight Versi 2": "Tidak ada data yang cukup untuk menghasilkan wawasan."
+                        "llama-3.3-8b-instruct": "Tidak ada data yang cukup untuk menghasilkan wawasan."
                     }
                 
                 # Selector untuk versi wawasan (bahkan jika tidak ada grafik)
@@ -755,7 +755,7 @@ if st.session_state.data is not None:
                 current_insights = st.session_state.chart_insights.get(chart['key'], {})
                 selected_insight_version = st.radio(
                     "Pilih Versi Wawasan:",
-                    ("Insight Versi 1", "Insight Versi 2"),
+                    ("Insight Versi 1", "llama-3.3-8b-instruct"),
                     key=f"insight_selector_{chart['key']}_no_chart"
                 )
                 insight_text_to_display = current_insights.get(selected_insight_version, "Klik 'Buat Wawasan AI' untuk menghasilkan wawasan.")
