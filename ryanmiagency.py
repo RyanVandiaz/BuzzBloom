@@ -438,14 +438,14 @@ if st.session_state.data is None:
             uploaded_file = st.file_uploader("Pilih file CSV", type="csv", key="main_file_uploader")
             if uploaded_file is not None:
                 # Periksa apakah file yang diunggah sama dengan yang terakhir kali diproses
-                if uploaded_file.name != st.session_state.last_uploaded_file_name:
+                # Ini penting untuk menghindari pemrosesan ulang saat widget file_uploader mempertahankan nilainya
+                if uploaded_file.name != st.session_state.last_uploaded_file_name or uploaded_file.size != st.session_state.last_uploaded_file_size:
                     st.session_state.data = parse_csv(uploaded_file)
                     if st.session_state.data is not None:
                         # Simpan detail file
                         st.session_state.last_uploaded_file_name = uploaded_file.name
                         st.session_state.last_uploaded_file_size = uploaded_file.size
-                        # Tidak perlu st.success() di sini, akan ditampilkan di bagian info file.
-                        # Tidak perlu st.rerun() di sini, Streamlit akan otomatis re-render.
+                        st.rerun() # PERBAIKAN: Memaksa rerun untuk menyembunyikan bagian unggah dan menampilkan dashboard
                 # else:
                 #     st.info("File ini sudah diunggah dan dianalisis.") # Opsional: pesan jika file yang sama diunggah ulang
             st.markdown('</div>', unsafe_allow_html=True)
